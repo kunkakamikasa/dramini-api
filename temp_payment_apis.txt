@@ -1,0 +1,68 @@
+// 获取充值套餐列表
+app.get('/api/v1/payment-packages', async (req, reply) => {
+  try {
+    const packages = await prisma.paymentPackage.findMany({
+      where: { isActive: true },
+      orderBy: { order: 'asc' }
+    })
+    
+    const formattedPackages = packages.map(pkg => ({
+      id: pkg.id,
+      name: pkg.name,
+      coins: pkg.baseCoins,
+      bonus: pkg.bonusCoins,
+      price: pkg.priceUsd / 100, // 转换为美元
+      discount: pkg.bonusCoins > 0 ? `+${Math.round((pkg.bonusCoins / pkg.baseCoins) * 100)}%` : null,
+      isNewUser: pkg.isFirstTime,
+      description: pkg.description
+    }))
+    
+    return { ok: true, packages: formattedPackages }
+  } catch (error) {
+    app.log.error(error)
+    return reply.code(500).send({ ok: false, error: 'Database error' })
+  }
+})
+
+// 获取收费策略
+app.get('/api/v1/pricing-strategy', async (req, reply) => {
+  try {
+    const strategy = await prisma.pricingStrategy.findFirst({
+      where: { isActive: true },
+      include: {
+        seriesPricingTiers: {
+          orderBy: { minEpisodes: 'asc' }
+        }
+      }
+    })
+    
+    if (!strategy) {
+      return { 
+        ok: true, 
+        strategy: {
+          episodePriceCoins: 100,
+          defaultFreeEpisodes: 3,
+          seriesTiers: []
+        }
+      }
+    }
+    
+    return { 
+      ok: true, 
+      strategy: {
+        id: strategy.id,
+        name: strategy.name,
+        episodePriceCoins: strategy.episodePriceCoins,
+        defaultFreeEpisodes: strategy.defaultFreeEpisodes,
+        seriesTiers: strategy.seriesPricingTiers.map(tier => ({
+          minEpisodes: tier.minEpisodes,
+          maxEpisodes: tier.maxEpisodes,
+          priceCoins: tier.priceCoins
+        }))
+      }
+    }
+  } catch (error) {
+    app.log.error(error)
+    return reply.code(500).send({ ok: false, error: 'Database error' })
+  }
+})

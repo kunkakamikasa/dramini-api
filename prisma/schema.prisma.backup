@@ -1,0 +1,454 @@
+// This is your Prisma schema file for demo
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatar    String?
+  provider  String   @default("email")
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  roles       UserRole[]
+  purchases   Purchase[]
+  subscriptions Subscription[]
+  flagReports FlagReport[]
+  auditLogs   AuditLog[]
+  createdTitles Title[] @relation("TitleCreatedBy")
+  updatedTitles Title[] @relation("TitleUpdatedBy")
+  unlocks     Unlock[]
+  progress    Progress[]
+
+  @@map("users")
+}
+
+// RBAC System
+model Role {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  key         String @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// Content Management
+model Category {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  titles Title[]
+  titleCategories TitleCategory[]
+
+  @@map("categories")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  titles TitleTag[]
+
+  @@map("tags")
+}
+
+model Title {
+  id            String      @id @default(cuid())
+  slug          String      @unique
+  name          String
+  synopsis      String?
+  coverImageId  String?
+  coverUrl      String?
+  posterUrl     String?
+  previewImage  String?
+  description   String?
+  status        String      @default("DRAFT")
+  language      String      @default("en")
+  createdById   String
+  updatedById   String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  releaseAt     DateTime?
+  rating        Float?
+  featuredWeight Int        @default(0)
+
+  // Relations
+  createdBy     User        @relation("TitleCreatedBy", fields: [createdById], references: [id])
+  updatedBy     User        @relation("TitleUpdatedBy", fields: [updatedById], references: [id])
+  category      Category?   @relation(fields: [categoryId], references: [id])
+  categoryId    String?
+  episodes      Episode[]
+  tags          TitleTag[]
+  collections   CollectionItem[]
+  purchases     Purchase[]
+  flagReports   FlagReport[]
+  translations  Translation[]
+  featureSlots  FeatureSlot[]
+  unlocks       Unlock[]
+  progress      Progress[]
+  categories    TitleCategory[]
+
+  @@map("titles")
+}
+
+model TitleTag {
+  id      String @id @default(cuid())
+  titleId String
+  tagId   String
+
+  // Relations
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([titleId, tagId])
+  @@map("title_tags")
+}
+
+model Episode {
+  id             String        @id @default(cuid())
+  titleId        String
+  epNumber       Int
+  index          Int           @default(0)
+  name           String
+  durationSec    Int?
+  videoId        String?
+  videoUrl       String?
+  isFreePreview  Boolean       @default(false)
+  isFree         Boolean       @default(false)
+  lockType       String        @default("PAID_PER_EPISODE")
+  priceCents     Int?
+  status         String        @default("DRAFT")
+  order          Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  title       Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  purchases   Purchase[]
+  flagReports FlagReport[]
+  unlocks     Unlock[]
+  progress    Progress[]
+
+  @@unique([titleId, epNumber])
+  @@map("episodes")
+}
+
+// Commerce
+model PricingPlan {
+  id          String      @id @default(cuid())
+  type        String
+  priceCents  Int
+  currency    String      @default("USD")
+  benefitsJson String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  subscriptions Subscription[]
+  purchases     Purchase[]
+
+  @@map("pricing_plans")
+}
+
+model Purchase {
+  id        String        @id @default(cuid())
+  userId    String
+  titleId   String
+  episodeId String?
+  planId    String?
+  type      String        @default("one_time")
+  amountCents Int
+  currency  String        @default("USD")
+  provider  String
+  status    String        @default("PENDING")
+  extRef    String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id])
+  title   Title   @relation(fields: [titleId], references: [id])
+  episode Episode? @relation(fields: [episodeId], references: [id])
+  plan    PricingPlan? @relation(fields: [planId], references: [id])
+
+  @@map("purchases")
+}
+
+model Subscription {
+  id                String           @id @default(cuid())
+  userId            String
+  planId            String
+  status            String           @default("ACTIVE")
+  currentPeriodEnd  DateTime
+  extRef            String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  // Relations
+  user User         @relation(fields: [userId], references: [id])
+  plan PricingPlan  @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model Promotion {
+  id         String        @id @default(cuid())
+  code       String        @unique
+  type       String
+  value      Int
+  startsAt   DateTime
+  endsAt     DateTime
+  usageLimit Int?
+  usedCount  Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@map("promotions")
+}
+
+// Audit & Reports
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorUserId String
+  action     String
+  entity     String
+  entityId   String
+  beforeJson String?
+  afterJson  String?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  actor User @relation(fields: [actorUserId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model FlagReport {
+  id        String        @id @default(cuid())
+  userId    String
+  titleId   String?
+  episodeId String?
+  reason    String
+  status    String        @default("PENDING")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Relations
+  user    User     @relation(fields: [userId], references: [id])
+  title   Title?   @relation(fields: [titleId], references: [id])
+  episode Episode? @relation(fields: [episodeId], references: [id])
+
+  @@map("flag_reports")
+}
+
+// Settings & Localization
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  valueJson String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model Locale {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  // Relations
+  translations Translation[]
+
+  @@map("locales")
+}
+
+model Translation {
+  id        String   @id @default(cuid())
+  entity    String
+  entityId  String
+  field     String
+  localeId  String
+  value     String
+  status    String   @default("DRAFT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  locale Locale @relation(fields: [localeId], references: [id])
+  title  Title? @relation(fields: [titleId], references: [id])
+  titleId String?
+
+  @@unique([entity, entityId, field, localeId])
+  @@map("translations")
+}
+
+model Collection {
+  id            String       @id @default(cuid())
+  name          String
+  slug          String       @unique
+  type          String
+  ruleJson      String?
+  itemsOrderJson String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relations
+  items CollectionItem[]
+
+  @@map("collections")
+}
+
+model CollectionItem {
+  id           String @id @default(cuid())
+  collectionId String
+  titleId      String
+  order        Int    @default(0)
+
+  // Relations
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  title      Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, titleId])
+  @@map("collection_items")
+}
+
+// Additional Models for Content API
+model FeatureSlot {
+  id        String   @id @default(cuid())
+  titleId   String
+  position  Int
+  type      String   @default("BANNER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  title Title @relation(fields: [titleId], references: [id])
+  
+  @@map("feature_slots")
+}
+
+model Unlock {
+  id        String   @id @default(cuid())
+  userId    String
+  titleId   String?
+  episodeId String?
+  type      String   @default("PURCHASE")
+  createdAt DateTime @default(now())
+  
+  // Relations
+  user    User     @relation(fields: [userId], references: [id])
+  title   Title?   @relation(fields: [titleId], references: [id])
+  episode Episode? @relation(fields: [episodeId], references: [id])
+  
+  @@map("unlocks")
+}
+
+model Progress {
+  id           String   @id @default(cuid())
+  userId       String
+  titleId      String
+  episodeId    String
+  watchedSec   Int      @default(0)
+  completed    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  user    User    @relation(fields: [userId], references: [id])
+  title   Title   @relation(fields: [titleId], references: [id])
+  episode Episode @relation(fields: [episodeId], references: [id])
+  
+  @@unique([userId, episodeId])
+  @@map("progress")
+}
+
+model TranscodeJob {
+  id        String   @id @default(cuid())
+  videoId   String
+  status    String   @default("PENDING")
+  progress  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("transcode_jobs")
+}
+
+model TitleCategory {
+  id         String @id @default(cuid())
+  titleId    String
+  categoryId String
+  
+  // Relations
+  title    Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  @@unique([titleId, categoryId])
+  @@map("title_categories")
+}

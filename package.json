@@ -1,0 +1,37 @@
+{
+  "name": "content-api",
+  "version": "1.0.0",
+  "description": "Content API Gateway for frontend",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
+  },
+  "keywords": [
+    "api",
+    "gateway",
+    "content",
+    "fastify"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@fastify/cors": "^8.4.0",
+    "@fastify/jwt": "^7.2.4",
+    "@paypal/checkout-server-sdk": "^1.0.3",
+    "@prisma/client": "^5.22.0",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.24.3",
+    "stripe": "^14.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.4",
+    "prisma": "^5.22.0",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3"
+  }
+}
