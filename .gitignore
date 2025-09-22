@@ -20,5 +20,3 @@ Thumbs.db
 *.tar.gz
 *.rar
 *.7z
-.env
-.env.*
