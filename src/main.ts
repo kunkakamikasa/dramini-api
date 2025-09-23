@@ -21,7 +21,7 @@ const fastify = Fastify({
 
 // Register plugins
 fastify.register(cors, {
-  origin: ['http://localhost:3000', 'https://shortdramini.com'],
+  origin: ['http://localhost:3000', 'https://shortdramini.com', 'https://www.shortdramini.com'],
   credentials: true
 })
 
