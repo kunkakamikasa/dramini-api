@@ -176,27 +176,57 @@ export class ContentService {
         };
     }
 
-    // 获取横幅广告
+    // 获取横幅广告 - 修复版本
     async getHeroBanners() {
-        const banners = await prisma.sectionContent.findMany({
-            where: {
-                sectionType: 'hero_banner',
-                isActive: true
-            },
-            orderBy: {
-                orderIndex: 'asc'
-            }
-        });
+        try {
+            // 获取轮播图配置
+            const banners = await prisma.sectionContent.findMany({
+                where: {
+                    sectionType: 'hero_banner',
+                    isActive: true
+                },
+                orderBy: {
+                    orderIndex: 'asc'
+                }
+            });
 
-        return {
-            banners: banners.map(banner => ({
-                id: banner.id,
-                title: banner.title,
-                subtitle: banner.subtitle,
-                imageUrl: banner.imageUrl,
-                actionUrl: banner.jumpUrl,
-                order: banner.orderIndex
-            }))
-        };
+            // 获取所有contentId对应的影片信息
+            const contentIds = banners.map(banner => banner.contentId);
+            const movies = await prisma.title.findMany({
+                where: { id: { in: contentIds } },
+                select: {
+                    id: true,
+                    name: true,
+                    synopsis: true,
+                    coverImageId: true,
+                    status: true
+                }
+            });
+
+            // 创建影片ID到影片信息的映射
+            const movieMap = new Map(movies.map(movie => [movie.id, movie]));
+
+            // 映射数据到前端期望的格式
+            const mappedBanners = banners.map(banner => {
+                const movie = movieMap.get(banner.contentId);
+                return {
+                    id: banner.id,
+                    title: movie?.name || banner.title || 'Untitled',
+                    subtitle: movie?.synopsis || banner.subtitle || '',
+                    imageUrl: movie?.coverImageId || banner.imageUrl || '',
+                    actionUrl: banner.jumpUrl || '',
+                    order: banner.orderIndex
+                };
+            });
+
+            return {
+                banners: mappedBanners
+            };
+        } catch (error) {
+            console.error('Error fetching hero banners:', error);
+            return {
+                banners: []
+            };
+        }
     }
 }
