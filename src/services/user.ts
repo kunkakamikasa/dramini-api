@@ -1,4 +1,4 @@
-import { prisma } from '../prisma';
+import { prisma } from '../prisma.js';
 
 export class UserService {
     async signup(email: string, password: string, name?: string) {
