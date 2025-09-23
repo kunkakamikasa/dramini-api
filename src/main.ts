@@ -1,14 +1,17 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
+import multipart from '@fastify/multipart'
 import dotenv from 'dotenv'
 import { ContentService } from './services/index.js'
+import { CloudflareService } from './services/cloudflare.js'
 
 // Load environment variables
 dotenv.config()
 
 // Initialize services
 const contentService = new ContentService()
+const cloudflareService = new CloudflareService()
 
 const fastify = Fastify({
   logger: {
@@ -27,6 +30,12 @@ fastify.register(cors, {
 
 fastify.register(jwt, {
   secret: process.env.JWT_SECRET || 'dev_secret'
+})
+
+fastify.register(multipart, {
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
 })
 
 // Health route
@@ -63,6 +72,24 @@ fastify.get('/api/v1/public/hero-banners', async (request, reply) => {
     return banners;
   } catch (error) {
     reply.code(500).send({ error: 'Internal server error' });
+  }
+})
+
+// 图片上传端点
+fastify.post('/api/v1/upload/image', async (request, reply) => {
+  try {
+    const data = await request.file()
+    if (!data) {
+      return reply.code(400).send({ error: 'No file uploaded' })
+    }
+
+    const buffer = await data.toBuffer()
+    const imageUrl = await cloudflareService.uploadImage(buffer, data.filename)
+    
+    return { success: true, imageUrl }
+  } catch (error) {
+    console.error('Upload error:', error)
+    return reply.code(500).send({ error: 'Upload failed' })
   }
 })
 
