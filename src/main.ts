@@ -6,11 +6,15 @@ import dotenv from 'dotenv'
 // Load environment variables
 dotenv.config()
 
-// Import routes
-import healthRoutes from './routes/health'
-import publicRoutes from './routes/public'
-import userRoutes from './routes/user'
-import webhookRoutes from './routes/webhooks'
+// Import routes - 直接引用 dist 目录中的文件
+// @ts-ignore
+import healthRoutes from '../dist/routes/health'
+// @ts-ignore
+import publicRoutes from '../dist/routes/public'
+// @ts-ignore
+import userRoutes from '../dist/routes/user'
+// @ts-ignore
+import webhookRoutes from '../dist/routes/webhooks'
 
 const fastify = Fastify({
   logger: {
@@ -23,7 +27,7 @@ const fastify = Fastify({
 
 // Register plugins
 fastify.register(cors, {
-  origin: ['http://localhost:3000'],
+  origin: ['http://localhost:3000', 'https://shortdramini.com'],
   credentials: true
 })
 
