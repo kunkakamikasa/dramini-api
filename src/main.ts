@@ -2,7 +2,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import dotenv from 'dotenv'
-import { ContentService } from './services/index'
+import { ContentService } from './services/index.js'
 
 // Load environment variables
 dotenv.config()

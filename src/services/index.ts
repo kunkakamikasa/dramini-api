@@ -1,3 +1,3 @@
-export { ContentService } from './content';
-export { PaymentService } from './payment';
-export { UserService } from './user';
+export { ContentService } from './content.js';
+export { PaymentService } from './payment.js';
+export { UserService } from './user.js';
