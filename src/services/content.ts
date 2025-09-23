@@ -178,9 +178,25 @@ export class ContentService {
 
     // 获取横幅广告
     async getHeroBanners() {
-        // 简化实现，返回空数组
+        const banners = await prisma.sectionContent.findMany({
+            where: {
+                sectionType: 'hero_banner',
+                isActive: true
+            },
+            orderBy: {
+                orderIndex: 'asc'
+            }
+        });
+
         return {
-            banners: []
+            banners: banners.map(banner => ({
+                id: banner.id,
+                title: banner.title,
+                subtitle: banner.subtitle,
+                imageUrl: banner.imageUrl,
+                actionUrl: banner.jumpUrl,
+                order: banner.orderIndex
+            }))
         };
     }
 }

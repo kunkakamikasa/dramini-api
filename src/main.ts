@@ -2,9 +2,13 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import dotenv from 'dotenv'
+import { ContentService } from './services/index.js'
 
 // Load environment variables
 dotenv.config()
+
+// Initialize services
+const contentService = new ContentService()
 
 const fastify = Fastify({
   logger: {
@@ -33,20 +37,32 @@ fastify.get('/api/v1/health', async (request, reply) => {
 // Public routes
 fastify.get('/api/v1/public/titles', async (request, reply) => {
   try {
-    // 简单的测试数据
-    return {
-      titles: [
-        {
-          id: '1',
-          name: '测试剧集',
-          slug: 'test-drama',
-          synopsis: '这是一个测试剧集',
-          status: 'PUBLISHED'
-        }
-      ]
-    }
+    const { category, q } = request.query as { category?: string; q?: string };
+    const titles = await contentService.getTitles(category, q);
+    
+    // 修正字段映射
+    const mappedTitles = titles.map(title => ({
+      ...title,
+      mainTitle: title.name, // name → mainTitle
+      subTitle: title.synopsis, // synopsis → subTitle
+      coverUrl: title.coverImageId, // coverImageId → coverUrl
+      isOnline: title.status === 'PUBLISHED', // status → isOnline
+      bannerUrl: null // 暂时设为null
+    }));
+    
+    return { titles: mappedTitles };
   } catch (error) {
-    reply.code(500).send({ error: 'Internal server error' })
+    reply.code(500).send({ error: 'Internal server error' });
+  }
+})
+
+// Hero banners route
+fastify.get('/api/v1/public/hero-banners', async (request, reply) => {
+  try {
+    const banners = await contentService.getHeroBanners();
+    return banners;
+  } catch (error) {
+    reply.code(500).send({ error: 'Internal server error' });
   }
 })
 
