@@ -6,16 +6,6 @@ import dotenv from 'dotenv'
 // Load environment variables
 dotenv.config()
 
-// Import routes - 直接引用 dist 目录中的文件
-// @ts-ignore
-import healthRoutes from '../dist/routes/health'
-// @ts-ignore
-import publicRoutes from '../dist/routes/public'
-// @ts-ignore
-import userRoutes from '../dist/routes/user'
-// @ts-ignore
-import webhookRoutes from '../dist/routes/webhooks'
-
 const fastify = Fastify({
   logger: {
     level: 'info',
@@ -35,11 +25,30 @@ fastify.register(jwt, {
   secret: process.env.JWT_SECRET || 'dev_secret'
 })
 
-// Register routes
-fastify.register(healthRoutes, { prefix: '/api/v1' })
-fastify.register(publicRoutes, { prefix: '/api/v1/public' })
-fastify.register(userRoutes, { prefix: '/api/v1/user' })
-fastify.register(webhookRoutes, { prefix: '/api/v1/webhooks' })
+// Health route
+fastify.get('/api/v1/health', async (request, reply) => {
+  return { ok: true }
+})
+
+// Public routes
+fastify.get('/api/v1/public/titles', async (request, reply) => {
+  try {
+    // 简单的测试数据
+    return {
+      titles: [
+        {
+          id: '1',
+          name: '测试剧集',
+          slug: 'test-drama',
+          synopsis: '这是一个测试剧集',
+          status: 'PUBLISHED'
+        }
+      ]
+    }
+  } catch (error) {
+    reply.code(500).send({ error: 'Internal server error' })
+  }
+})
 
 // Start server
 const start = async () => {
