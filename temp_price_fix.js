@@ -9,3 +9,4 @@ const updatedContent = content.replace(
 
 fs.writeFileSync('src/main.ts', updatedContent);
 console.log('✅ 价格转换逻辑已修复');
+

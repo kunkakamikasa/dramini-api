@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -13,11 +13,9 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
-  password  String?  // 密码字段（可选，支持OAuth登录）
   avatar    String?
   provider  String   @default("email")
   status    String   @default("ACTIVE")
-  role      String   @default("USER") // 用户角色：USER, VIP, ADMIN
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -27,13 +25,8 @@ model User {
   subscriptions Subscription[]
   flagReports FlagReport[]
   auditLogs   AuditLog[]
-  userCoins   UserCoin?
   createdTitles Title[] @relation("TitleCreatedBy")
   updatedTitles Title[] @relation("TitleUpdatedBy")
-  userPurchases UserPurchase[] @relation("UserPurchases")
-  coinTransactions CoinTransaction[] @relation("UserCoinTransactions")
-  userSubscriptions UserSubscription[] @relation("UserSubscriptions")
-  adUnlocks     AdUnlock[] @relation("UserAdUnlocks")
 
   @@map("users")
 }
@@ -124,15 +117,9 @@ model Title {
   id            String      @id @default(cuid())
   slug          String      @unique
   name          String
-  mainTitle     String?     // 主标题
-  subTitle      String?     // 副标题
   synopsis      String?
   coverImageId  String?
-  coverUrl      String?     // 9:16封面图URL
-  bannerUrl     String?     // 16:9轮播图URL
-  previewImage  String?     // 首页大图预览
   status        String      @default("DRAFT")
-  isOnline      Boolean     @default(false) // 上下线状态
   language      String      @default("en")
   createdById   String
   updatedById   String
@@ -141,10 +128,6 @@ model Title {
   releaseAt     DateTime?
   rating        Float?
   featuredWeight Int        @default(0)
-  freeUntilEpisode Int?     // 免费到第几集
-  bundlePrice     Int?      // 整部剧价格（分为单位）
-  bundlePriceCurrency String @default("CNY") // 货币单位
-  bundlePriceCoins Int?     // 整部剧金币价格
 
   // Relations
   createdBy     User        @relation("TitleCreatedBy", fields: [createdById], references: [id])
@@ -157,10 +140,6 @@ model Title {
   purchases     Purchase[]
   flagReports   FlagReport[]
   translations  Translation[]
-  sectionContents SectionContent[] @relation("SectionContentTitle")
-  userPurchases   UserPurchase[] @relation("TitlePurchases")
-  coinTransactions CoinTransaction[] @relation("CoinTransactionTitle")
-  pricingOverride TitlePricingOverride?
 
   @@map("titles")
 }
@@ -181,17 +160,13 @@ model TitleTag {
 model Episode {
   id             String        @id @default(cuid())
   titleId        String
-  epNumber       Int           // 数据库实际字段名
-  name           String        // 数据库中是必填的
-  durationSec    Int?          // 数据库实际字段名
-  videoId        String?       // 数据库实际字段名
-  isFreePreview  Boolean       @default(false)  // 数据库实际字段名
+  epNumber       Int
+  name           String
+  durationSec    Int?
+  videoId        String?
+  isFreePreview  Boolean       @default(false)
   lockType       String        @default("PAID_PER_EPISODE")
   priceCents     Int?
-  isFree          Boolean      @default(false) // 单集是否免费
-  episodePrice    Int?         // 单集价格（分为单位）
-  priceCurrency   String       @default("CNY") // 货币单位
-  episodePriceCoins Int        @default(100) // 单集金币价格
   status         String        @default("DRAFT")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -200,9 +175,6 @@ model Episode {
   title      Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)
   purchases  Purchase[]
   flagReports FlagReport[]
-  userPurchases UserPurchase[] @relation("EpisodePurchases")
-  coinTransactions CoinTransaction[] @relation("CoinTransactionEpisode")
-  adUnlocks     AdUnlock[] @relation("AdUnlockEpisode")
 
   @@unique([titleId, epNumber])
   @@map("episodes")
@@ -387,221 +359,4 @@ model CollectionItem {
 
   @@unique([collectionId, titleId])
   @@map("collection_items")
-}
-
-// 统一的板块内容管理模型
-model SectionContent {
-  id        String   @id @default(cuid())
-  section   String   // 'hero', 'new_release', 'trending', 'popular_categories'
-  titleId   String   // 关联的影片ID
-  order     Int      @default(1)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  title     Title    @relation("SectionContentTitle", fields: [titleId], references: [id], onDelete: Cascade)
-
-  @@unique([section, titleId])
-  @@map("section_contents")
-}
-
-// 用户购买记录
-model UserPurchase {
-  id              String   @id @default(cuid())
-  userId          String   // 购买用户ID
-  titleId         String?  // 购买的剧ID（整部剧购买）
-  episodeId       String?  // 购买的剧集ID（单集购买）
-  purchaseType    String   // "SERIES" | "EPISODE"
-  paymentProvider String   // "STRIPE" | "PAYPAL" | "ALIPAY"
-  paymentId       String?  // 第三方支付ID
-  amount          Int      // 支付金额（分为单位）
-  currency        String   @default("CNY")
-  status          String   @default("PENDING") // "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED"
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  // Relations
-  user            User     @relation("UserPurchases", fields: [userId], references: [id], onDelete: Cascade)
-  title           Title?   @relation("TitlePurchases", fields: [titleId], references: [id], onDelete: Cascade)
-  episode         Episode? @relation("EpisodePurchases", fields: [episodeId], references: [id], onDelete: Cascade)
-  
-  @@map("user_purchases")
-}
-
-// 用户金币账户
-model UserCoin {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  balance       Int      @default(0) // 当前金币余额
-  totalEarned   Int      @default(0) // 历史总获得金币
-  totalSpent    Int      @default(0) // 历史总消费金币
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  // Relations
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions  CoinTransaction[]
-  
-  @@map("user_coins")
-}
-
-// 充值套餐配置
-model PaymentPackage {
-  id              String   @id @default(cuid())
-  name            String   // "入门档", "最常用"等
-  priceUsd        Int      // 美分为单位，如 499 = $4.99
-  baseCoins       Int      // 基础金币数
-  bonusCoins      Int      @default(0) // 赠送金币数
-  isFirstTime     Boolean  @default(false) // 是否首充套餐
-  isActive        Boolean  @default(true)
-  order           Int      @default(0) // 显示顺序
-  description     String?  // 套餐描述
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  // Relations
-  transactions    CoinTransaction[]
-  
-  @@map("payment_packages")
-}
-
-// 金币交易记录
-model CoinTransaction {
-  id              String   @id @default(cuid())
-  userId          String
-  type            String   // "PURCHASE", "SPEND", "AD_REWARD", "SUBSCRIPTION_BONUS"
-  amount          Int      // 金币数量（正数=获得，负数=消费）
-  balanceBefore   Int      // 交易前余额
-  balanceAfter    Int      // 交易后余额
-  description     String?  // 交易描述
-  
-  // 关联信息
-  packageId       String?  // 充值套餐ID
-  titleId         String?  // 相关剧集ID（如果是剧集消费）
-  episodeId       String?  // 相关单集ID
-  userSubscriptionId String? // 用户订阅ID
-  
-  // 支付信息
-  paymentProvider String?  // "STRIPE", "PAYPAL", "AD_NETWORK"
-  paymentId       String?  // 第三方支付ID
-  status          String   @default("COMPLETED") // "PENDING", "COMPLETED", "FAILED"
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  // Relations
-  user            User             @relation("UserCoinTransactions", fields: [userId], references: [id], onDelete: Cascade)
-  userCoin        UserCoin         @relation(fields: [userId], references: [userId], onDelete: Cascade)
-  package         PaymentPackage?  @relation(fields: [packageId], references: [id])
-  title           Title?           @relation("CoinTransactionTitle", fields: [titleId], references: [id])
-  episode         Episode?         @relation("CoinTransactionEpisode", fields: [episodeId], references: [id])
-  userSubscription UserSubscription? @relation(fields: [userSubscriptionId], references: [id])
-  
-  @@map("coin_transactions")
-}
-
-// 用户订阅
-model UserSubscription {
-  id              String   @id @default(cuid())
-  userId          String
-  planType        String   // "MONTHLY", "QUARTERLY", "YEARLY"
-  status          String   @default("ACTIVE") // "ACTIVE", "CANCELLED", "EXPIRED"
-  priceUsd        Int      // 订阅价格（美分）
-  bonusCoins      Int      @default(0) // 每期赠送金币
-  startDate       DateTime
-  endDate         DateTime
-  autoRenew       Boolean  @default(true)
-  
-  // 支付信息
-  paymentProvider String?
-  paymentId       String?
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  // Relations
-  user            User     @relation("UserSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
-  transactions    CoinTransaction[]
-  
-  @@map("user_subscriptions")
-}
-
-// 全局收费策略配置
-model PricingStrategy {
-  id                String   @id @default(cuid())
-  name              String   @unique // "default", "premium", "custom"等
-  description       String?
-  
-  // 单集收费配置
-  episodePriceCoins Int      @default(100) // 单集价格（金币）
-  
-  // 整部剧收费配置（分层级）
-  seriesPricingTiers SeriesPricingTier[]
-  
-  // 免费策略
-  defaultFreeEpisodes Int     @default(3)  // 默认免费集数
-  
-  isActive          Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
-  @@map("pricing_strategies")
-}
-
-// 整部剧分层定价
-model SeriesPricingTier {
-  id                String   @id @default(cuid())
-  strategyId        String
-  name              String   // "短剧", "中剧", "长剧"
-  minEpisodes       Int      // 最小集数，如 1
-  maxEpisodes       Int?     // 最大集数，如 20，null表示无上限
-  priceCoins        Int      // 该层级的金币价格
-  discountPercent   Int      @default(0) // 相对单集的折扣百分比
-  
-  // Relations
-  strategy          PricingStrategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
-  
-  @@unique([strategyId, minEpisodes])
-  @@map("series_pricing_tiers")
-}
-
-// 影片自定义收费覆盖
-model TitlePricingOverride {
-  id                String   @id @default(cuid())
-  titleId           String   @unique
-  customStrategy    Boolean  @default(false) // 是否使用自定义策略
-  
-  // 自定义单集价格
-  customEpisodePrice Int?    // 覆盖默认单集价格
-  
-  // 自定义整部剧价格
-  customSeriesPrice  Int?    // 直接设置整部剧价格
-  
-  // 自定义免费集数
-  customFreeEpisodes Int?    // 覆盖默认免费集数
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
-  // Relations
-  title             Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
-  
-  @@map("title_pricing_overrides")
-}
-
-// 广告解锁记录
-model AdUnlock {
-  id              String   @id @default(cuid())
-  userId          String
-  adProvider      String   // "ADMOB", "FACEBOOK", "UNITY"
-  rewardCoins     Int      @default(30) // 奖励金币数
-  episodeId       String?  // 解锁的剧集ID（如果适用）
-  createdAt       DateTime @default(now())
-  
-  // Relations
-  user            User     @relation("UserAdUnlocks", fields: [userId], references: [id], onDelete: Cascade)
-  episode         Episode? @relation("AdUnlockEpisode", fields: [episodeId], references: [id])
-  
-  @@map("ad_unlocks")
 }

@@ -9,3 +9,4 @@ const updatedContent = content.replace(
 
 fs.writeFileSync('src/main.ts', updatedContent);
 console.log('✅ 整部剧价格逻辑已修复');
+

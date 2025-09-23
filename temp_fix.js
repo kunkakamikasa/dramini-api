@@ -10,3 +10,4 @@ const updatedContent = content.replace(
 
 fs.writeFileSync('src/main.ts', updatedContent);
 console.log('✅ API字段映射已修复');
+

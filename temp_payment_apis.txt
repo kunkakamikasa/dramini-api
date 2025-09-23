@@ -66,3 +66,4 @@ app.get('/api/v1/pricing-strategy', async (req, reply) => {
     return reply.code(500).send({ ok: false, error: 'Database error' })
   }
 })
+
