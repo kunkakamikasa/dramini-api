@@ -7,7 +7,7 @@ export class CloudflareService {
   private apiUrl: string
 
   constructor() {
-    this.accountId = process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE || ''
+    this.accountId = process.env.CLOUDFLARE_ACCOUNT_ID || ''
     this.apiToken = process.env.CLOUDFLARE_STREAM_API_TOKEN || ''
     this.apiUrl = `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/images/v1`
   }
