@@ -236,10 +236,14 @@ export class ContentService {
         try {
             console.log('Creating hero banner with data:', data);
             
-            // 获取影片的轮播图URL
+            // 获取影片信息（不包含bannerUrl字段）
             const movie = await prisma.title.findUnique({
                 where: { id: data.movieId },
-                select: { bannerUrl: true }
+                select: { 
+                    id: true,
+                    name: true,
+                    coverImageId: true
+                }
             });
             
             const banner = await prisma.sectionContent.create({
@@ -250,7 +254,7 @@ export class ContentService {
                     contentType: 'movie',
                     title: data.title || null,
                     subtitle: data.subtitle || null,
-                    imageUrl: movie?.bannerUrl || data.imageUrl || null,
+                    imageUrl: data.imageUrl || movie?.coverImageId || null, // 使用传入的imageUrl或封面图
                     jumpUrl: data.jumpUrl || null,
                     orderIndex: data.order || 0,
                     isActive: true
