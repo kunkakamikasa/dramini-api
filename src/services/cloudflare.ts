@@ -45,9 +45,10 @@ export class CloudflareService {
       }
     } catch (error) {
       console.error('Cloudflare upload error:', error)
-      if (error.response) {
-        console.error('Response status:', error.response.status)
-        console.error('Response data:', error.response.data)
+      if (error instanceof Error && 'response' in error) {
+        const axiosError = error as any
+        console.error('Response status:', axiosError.response?.status)
+        console.error('Response data:', axiosError.response?.data)
       }
       throw error
     }
