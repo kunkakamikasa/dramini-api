@@ -56,7 +56,7 @@ fastify.get('/api/v1/public/titles', async (request, reply) => {
       subTitle: title.synopsis, // synopsis → subTitle
       coverUrl: title.coverImageId, // coverImageId → coverUrl
       isOnline: title.status === 'PUBLISHED', // status → isOnline
-      bannerUrl: null // 暂时设为null
+      bannerUrl: title.bannerUrl // 使用数据库中的bannerUrl字段
     }));
     
     return { titles: mappedTitles };

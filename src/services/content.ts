@@ -200,6 +200,7 @@ export class ContentService {
                     name: true,
                     synopsis: true,
                     coverImageId: true,
+                    bannerUrl: true, // 添加bannerUrl字段
                     status: true
                 }
             });
@@ -214,7 +215,7 @@ export class ContentService {
                     id: banner.id,
                     title: movie?.name || banner.title || 'Untitled',
                     subtitle: movie?.synopsis || banner.subtitle || '',
-                    imageUrl: movie?.coverImageId || banner.imageUrl || '',
+                    imageUrl: movie?.bannerUrl || movie?.coverImageId || banner.imageUrl || '',
                     actionUrl: banner.jumpUrl || '',
                     order: banner.orderIndex
                 };
@@ -236,13 +237,14 @@ export class ContentService {
         try {
             console.log('Creating hero banner with data:', data);
             
-            // 获取影片信息（不包含bannerUrl字段）
+            // 获取影片信息
             const movie = await prisma.title.findUnique({
                 where: { id: data.movieId },
                 select: { 
                     id: true,
                     name: true,
-                    coverImageId: true
+                    coverImageId: true,
+                    bannerUrl: true
                 }
             });
             
@@ -254,7 +256,7 @@ export class ContentService {
                     contentType: 'movie',
                     title: data.title || null,
                     subtitle: data.subtitle || null,
-                    imageUrl: data.imageUrl || movie?.coverImageId || null, // 使用传入的imageUrl或封面图
+                    imageUrl: data.imageUrl || movie?.bannerUrl || movie?.coverImageId || null, // 优先使用bannerUrl
                     jumpUrl: data.jumpUrl || null,
                     orderIndex: data.order || 0,
                     isActive: true
