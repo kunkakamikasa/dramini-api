@@ -24,7 +24,14 @@ const fastify = Fastify({
 
 // Register plugins
 fastify.register(cors, {
-  origin: ['http://localhost:3000', 'https://shortdramini.com', 'https://www.shortdramini.com'],
+  origin: [
+    'http://localhost:3000', 
+    'https://shortdramini.com', 
+    'https://www.shortdramini.com',
+    'https://dramini-web.vercel.app',
+    'https://dramini-web-git-main.vercel.app',
+    'https://dramini-web-git-develop.vercel.app'
+  ],
   credentials: true
 })
 
