@@ -1,4 +1,5 @@
 import { prisma } from '../prisma.js';
+import crypto from 'crypto';
 
 export class ContentService {
     // 获取首页内容
@@ -227,6 +228,40 @@ export class ContentService {
             return {
                 banners: []
             };
+        }
+    }
+
+    // 创建轮播图
+    async createHeroBanner(data: any) {
+        try {
+            console.log('Creating hero banner with data:', data);
+            
+            // 获取影片的轮播图URL
+            const movie = await prisma.title.findUnique({
+                where: { id: data.movieId },
+                select: { bannerUrl: true }
+            });
+            
+            const banner = await prisma.sectionContent.create({
+                data: {
+                    id: crypto.randomUUID(),
+                    sectionType: 'hero_banner',
+                    contentId: data.movieId,
+                    contentType: 'movie',
+                    title: data.title || null,
+                    subtitle: data.subtitle || null,
+                    imageUrl: movie?.bannerUrl || data.imageUrl || null,
+                    jumpUrl: data.jumpUrl || null,
+                    orderIndex: data.order || 0,
+                    isActive: true
+                }
+            });
+            
+            console.log('Hero banner created successfully:', banner);
+            return banner;
+        } catch (error) {
+            console.error('Error creating hero banner:', error);
+            throw error;
         }
     }
 }

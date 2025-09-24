@@ -75,6 +75,20 @@ fastify.get('/api/v1/public/hero-banners', async (request, reply) => {
   }
 })
 
+// 创建轮播图端点
+fastify.post('/api/v1/public/hero-banners', async (request, reply) => {
+  try {
+    const data = request.body as any;
+    console.log('Creating hero banner with data:', data);
+    
+    const banner = await contentService.createHeroBanner(data);
+    return banner;
+  } catch (error) {
+    console.error('Failed to create hero banner:', error);
+    reply.code(500).send({ error: 'Failed to create banner' });
+  }
+})
+
 // 图片上传端点
 fastify.post('/api/v1/upload/image', async (request, reply) => {
   try {
