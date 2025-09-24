@@ -213,6 +213,7 @@ export class ContentService {
                 const movie = movieMap.get(banner.contentId);
                 return {
                     id: banner.id,
+                    movieId: banner.contentId, // 添加movieId字段
                     title: movie?.name || banner.title || 'Untitled',
                     subtitle: movie?.synopsis || banner.subtitle || '',
                     imageUrl: movie?.bannerUrl || movie?.coverImageId || banner.imageUrl || '',
