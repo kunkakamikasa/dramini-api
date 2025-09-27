@@ -171,13 +171,14 @@ fastify.post('/api/v1/user/purchase/checkout/stripe', async (request, reply) => 
     const payload = request.body as any
     console.log('Stripe checkout request:', payload)
     
-    // 这里应该集成 Stripe SDK 创建支付会话
-    // 暂时返回模拟的 checkout URL
-    const checkoutUrl = `https://checkout.stripe.com/pay/cs_test_${Date.now()}`
-    
+    // 暂时返回成功状态，不跳转到支付页面
+    // 实际项目中应该集成 Stripe SDK 创建真实的支付会话
     return {
       success: true,
-      checkoutUrl: checkoutUrl
+      message: 'Payment processing initiated',
+      orderId: `order_${Date.now()}`,
+      // 暂时不返回 checkoutUrl，避免跳转到无效页面
+      // checkoutUrl: `https://checkout.stripe.com/pay/cs_test_${Date.now()}`
     }
   } catch (error) {
     console.error('Stripe checkout error:', error)
@@ -191,13 +192,14 @@ fastify.post('/api/v1/user/purchase/checkout/paypal', async (request, reply) => 
     const payload = request.body as any
     console.log('PayPal checkout request:', payload)
     
-    // 这里应该集成 PayPal SDK 创建支付会话
-    // 暂时返回模拟的 checkout URL
-    const checkoutUrl = `https://www.paypal.com/checkoutnow?token=${Date.now()}`
-    
+    // 暂时返回成功状态，不跳转到支付页面
+    // 实际项目中应该集成 PayPal SDK 创建真实的支付会话
     return {
       success: true,
-      checkoutUrl: checkoutUrl
+      message: 'Payment processing initiated',
+      orderId: `order_${Date.now()}`,
+      // 暂时不返回 checkoutUrl，避免跳转到无效页面
+      // checkoutUrl: `https://www.paypal.com/checkoutnow?token=${Date.now()}`
     }
   } catch (error) {
     console.error('PayPal checkout error:', error)
