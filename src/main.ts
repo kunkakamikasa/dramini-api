@@ -5,6 +5,7 @@ import multipart from '@fastify/multipart'
 import dotenv from 'dotenv'
 import { ContentService } from './services/index.js'
 import { CloudflareService } from './services/cloudflare.js'
+import { PaymentService } from './services/payment.js'
 
 // Load environment variables
 dotenv.config()
@@ -12,6 +13,7 @@ dotenv.config()
 // Initialize services
 const contentService = new ContentService()
 const cloudflareService = new CloudflareService()
+const paymentService = new PaymentService()
 
 const fastify = Fastify({
   logger: {
@@ -171,15 +173,8 @@ fastify.post('/api/v1/user/purchase/checkout/stripe', async (request, reply) => 
     const payload = request.body as any
     console.log('Stripe checkout request:', payload)
     
-    // 暂时返回成功状态，不跳转到支付页面
-    // 实际项目中应该集成 Stripe SDK 创建真实的支付会话
-    return {
-      success: true,
-      message: 'Payment processing initiated',
-      orderId: `order_${Date.now()}`,
-      // 暂时不返回 checkoutUrl，避免跳转到无效页面
-      // checkoutUrl: `https://checkout.stripe.com/pay/cs_test_${Date.now()}`
-    }
+    const result = await paymentService.createStripeCheckoutSession(payload)
+    return result
   } catch (error) {
     console.error('Stripe checkout error:', error)
     return reply.code(500).send({ error: 'Stripe checkout failed' })
@@ -192,18 +187,64 @@ fastify.post('/api/v1/user/purchase/checkout/paypal', async (request, reply) => 
     const payload = request.body as any
     console.log('PayPal checkout request:', payload)
     
-    // 暂时返回成功状态，不跳转到支付页面
-    // 实际项目中应该集成 PayPal SDK 创建真实的支付会话
-    return {
-      success: true,
-      message: 'Payment processing initiated',
-      orderId: `order_${Date.now()}`,
-      // 暂时不返回 checkoutUrl，避免跳转到无效页面
-      // checkoutUrl: `https://www.paypal.com/checkoutnow?token=${Date.now()}`
-    }
+    const result = await paymentService.createPayPalOrder(payload)
+    return result
   } catch (error) {
     console.error('PayPal checkout error:', error)
     return reply.code(500).send({ error: 'PayPal checkout failed' })
+  }
+})
+
+// 支付验证端点
+fastify.post('/api/v1/payment/verify/stripe', async (request, reply) => {
+  try {
+    const { sessionId } = request.body as { sessionId: string }
+    console.log('Stripe payment verification request:', sessionId)
+    
+    const result = await paymentService.verifyStripePayment(sessionId)
+    return result
+  } catch (error) {
+    console.error('Stripe payment verification error:', error)
+    return reply.code(500).send({ error: 'Stripe payment verification failed' })
+  }
+})
+
+fastify.post('/api/v1/payment/verify/paypal', async (request, reply) => {
+  try {
+    const { orderId } = request.body as { orderId: string }
+    console.log('PayPal payment verification request:', orderId)
+    
+    const result = await paymentService.verifyPayPalPayment(orderId)
+    return result
+  } catch (error) {
+    console.error('PayPal payment verification error:', error)
+    return reply.code(500).send({ error: 'PayPal payment verification failed' })
+  }
+})
+
+// 用户金币管理端点
+fastify.post('/api/v1/user/coins/add', async (request, reply) => {
+  try {
+    const { userId, coins, source, transactionId, planId } = request.body as {
+      userId: string
+      coins: number
+      source: string
+      transactionId: string
+      planId: string
+    }
+    
+    console.log('Adding coins to user:', { userId, coins, source, transactionId, planId })
+    
+    // 这里应该更新数据库中的用户金币余额
+    // 暂时返回成功状态
+    return {
+      success: true,
+      message: 'Coins added successfully',
+      newBalance: coins, // 实际应该从数据库获取
+    }
+  } catch (error) {
+    console.error('Add coins error:', error)
+    return reply.code(500).send({ error: 'Failed to add coins' })
   }
 })
 
