@@ -1,5 +1,5 @@
 import Stripe from 'stripe'
-import { PayPalApi, PayPalEnvironment } from '@paypal/paypal-server-sdk'
+import paypal from '@paypal/checkout-server-sdk'
 
 // 初始化 Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -7,15 +7,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 // 初始化 PayPal
-const paypalEnvironment = process.env.PAYPAL_ENVIRONMENT === 'live' 
-  ? PayPalEnvironment.Live
-  : PayPalEnvironment.Sandbox
+const environment = process.env.PAYPAL_ENVIRONMENT === 'live' 
+  ? new paypal.core.LiveEnvironment(process.env.PAYPAL_CLIENT_ID!, process.env.PAYPAL_CLIENT_SECRET!)
+  : new paypal.core.SandboxEnvironment(process.env.PAYPAL_CLIENT_ID!, process.env.PAYPAL_CLIENT_SECRET!)
 
-const paypalClient = new PayPalApi({
-  clientId: process.env.PAYPAL_CLIENT_ID!,
-  clientSecret: process.env.PAYPAL_CLIENT_SECRET!,
-  environment: paypalEnvironment,
-})
+const paypalClient = new paypal.core.PayPalHttpClient(environment)
 
 export class PaymentService {
   // Stripe 支付
@@ -88,8 +84,10 @@ export class PaymentService {
     try {
       const { plan, priceCents, meta } = payload
       
-      // 创建 PayPal 订单
-      const order = await paypalClient.orders.create({
+      // 创建 PayPal 订单请求
+      const request = new paypal.orders.OrdersCreateRequest()
+      request.prefer('return=representation')
+      request.requestBody({
         intent: 'CAPTURE',
         purchase_units: [
           {
@@ -116,11 +114,18 @@ export class PaymentService {
           cancel_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/cancel`,
         },
       })
+
+      const response = await paypalClient.execute(request)
       
-      return {
-        success: true,
-        checkoutUrl: order.links?.find(link => link.rel === 'approve')?.href,
-        orderId: order.id,
+      if (response.statusCode === 201) {
+        const order = response.result
+        return {
+          success: true,
+          checkoutUrl: order.links?.find((link: any) => link.rel === 'approve')?.href,
+          orderId: order.id,
+        }
+      } else {
+        throw new Error(`PayPal order creation failed: ${response.statusCode}`)
       }
     } catch (error) {
       console.error('PayPal order creation failed:', error)
@@ -155,12 +160,18 @@ export class PaymentService {
   // 验证 PayPal 支付
   async verifyPayPalPayment(orderId: string) {
     try {
-      const order = await paypalClient.orders.get(orderId)
+      const request = new paypal.orders.OrdersGetRequest(orderId)
+      const response = await paypalClient.execute(request)
       
-      return {
-        success: order.status === 'COMPLETED',
-        order,
-        metadata: order.purchase_units?.[0]?.custom_id ? JSON.parse(order.purchase_units[0].custom_id) : {},
+      if (response.statusCode === 200) {
+        const order = response.result
+        return {
+          success: order.status === 'COMPLETED',
+          order,
+          metadata: order.purchase_units?.[0]?.custom_id ? JSON.parse(order.purchase_units[0].custom_id) : {},
+        }
+      } else {
+        throw new Error(`PayPal order verification failed: ${response.statusCode}`)
       }
     } catch (error) {
       console.error('PayPal payment verification failed:', error)
@@ -171,12 +182,22 @@ export class PaymentService {
   // 捕获 PayPal 支付
   async capturePayPalPayment(orderId: string) {
     try {
-      const order = await paypalClient.orders.capture(orderId)
+      const request = new paypal.orders.OrdersCaptureRequest(orderId)
+      request.requestBody({
+        payment_source: {} as any
+      })
       
-      return {
-        success: true,
-        order,
-        captureId: order.purchase_units?.[0]?.payments?.captures?.[0]?.id,
+      const response = await paypalClient.execute(request)
+      
+      if (response.statusCode === 201) {
+        const order = response.result
+        return {
+          success: true,
+          order,
+          captureId: order.purchase_units?.[0]?.payments?.captures?.[0]?.id,
+        }
+      } else {
+        throw new Error(`PayPal payment capture failed: ${response.statusCode}`)
       }
     } catch (error) {
       console.error('PayPal payment capture failed:', error)
