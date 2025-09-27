@@ -114,6 +114,57 @@ fastify.post('/api/v1/upload/image', async (request, reply) => {
   }
 })
 
+// 充值套餐端点
+fastify.get('/api/v1/payment-packages', async (request, reply) => {
+  try {
+    // 从CMS获取充值套餐数据
+    const cmsBase = process.env.CMS_BASE_URL || 'https://cms.shortdramini.com'
+    const response = await fetch(`${cmsBase}/api/payment-packages`)
+    
+    if (!response.ok) {
+      throw new Error(`CMS API error: ${response.status}`)
+    }
+    
+    const packages = await response.json()
+    
+    // 转换为前端期望的格式
+    const formattedPackages = packages.map((pkg: any) => ({
+      id: pkg.id,
+      name: pkg.name,
+      coins: pkg.baseCoins,
+      bonus: pkg.bonusCoins,
+      price: pkg.priceUsd / 100, // 转换为美元
+      discount: pkg.bonusCoins > 0 ? `+${Math.round((pkg.bonusCoins / pkg.baseCoins) * 100)}%` : null,
+      isNewUser: pkg.isFirstTime,
+      description: pkg.description
+    }))
+    
+    return { 
+      ok: true, 
+      packages: formattedPackages 
+    }
+  } catch (error) {
+    console.error('Failed to fetch payment packages:', error)
+    
+    // 返回默认套餐作为后备
+    return {
+      ok: true,
+      packages: [
+        {
+          id: 'default',
+          name: 'Basic Package',
+          coins: 500,
+          bonus: 50,
+          price: 4.99,
+          discount: '+10%',
+          isNewUser: false,
+          description: 'Default coin package'
+        }
+      ]
+    }
+  }
+})
+
 // Start server
 const start = async () => {
   try {
