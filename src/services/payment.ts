@@ -24,13 +24,9 @@ export class PaymentService {
     userId: string,
     tierKey: string,
     provider: 'stripe' | 'paypal',
+    tierConfig: PaymentTier,
     providerOrderId?: string
   ) {
-    const tierConfig = getTierConfig(tierKey)
-    if (!tierConfig) {
-      throw new Error(`Invalid tier key: ${tierKey}`)
-    }
-
     const order = await prisma.paymentOrder.create({
       data: {
         userId,
@@ -52,6 +48,41 @@ export class PaymentService {
     return order
   }
 
+  // Get CMS package configuration
+  private async getCmsPackageConfig(packageId: string): Promise<PaymentTier | null> {
+    try {
+      const cmsBase = process.env.CMS_BASE_URL || 'https://cms.shortdramini.com'
+      const response = await fetch(`${cmsBase}/api/payment-packages`)
+      
+      if (!response.ok) {
+        console.error(`CMS API error: ${response.status}`)
+        return null
+      }
+      
+      const packages = await response.json()
+      const pkg = packages.find((p: any) => p.id === packageId)
+      
+      if (!pkg) {
+        return null
+      }
+      
+      // 转换为 PaymentTier 格式
+      return {
+        key: pkg.id,
+        name: pkg.name,
+        coins: pkg.coins,
+        bonusCoins: pkg.bonus,
+        priceCents: Math.round(pkg.price * 100), // 转换为分
+        currency: 'USD',
+        isFirstTime: pkg.isNewUser,
+        description: pkg.description
+      }
+    } catch (error) {
+      console.error('Failed to fetch CMS package config:', error)
+      return null
+    }
+  }
+
   // Stripe 支付
   async createStripeCheckoutSession(payload: {
     tierKey: string
@@ -60,15 +91,20 @@ export class PaymentService {
     try {
       const { tierKey, userId } = payload
       
-      // 验证 tier_key
-      if (!validateTierKey(tierKey)) {
+      // 获取套餐配置 - 支持硬编码和CMS动态套餐
+      let tierConfig = getTierConfig(tierKey)
+      
+      // 如果不是硬编码套餐，尝试从CMS获取
+      if (!tierConfig) {
+        tierConfig = await this.getCmsPackageConfig(tierKey)
+      }
+      
+      if (!tierConfig) {
         throw new Error(`Invalid tier key: ${tierKey}`)
       }
-
-      const tierConfig = getTierConfig(tierKey)!
       
       // 创建支付订单记录
-      const order = await this.createPaymentOrder(userId, tierKey, 'stripe')
+      const order = await this.createPaymentOrder(userId, tierKey, 'stripe', tierConfig)
       
       // 创建 Stripe Checkout Session
       const session = await stripe.checkout.sessions.create({
@@ -124,15 +160,20 @@ export class PaymentService {
     try {
       const { tierKey, userId } = payload
       
-      // 验证 tier_key
-      if (!validateTierKey(tierKey)) {
+      // 获取套餐配置 - 支持硬编码和CMS动态套餐
+      let tierConfig = getTierConfig(tierKey)
+      
+      // 如果不是硬编码套餐，尝试从CMS获取
+      if (!tierConfig) {
+        tierConfig = await this.getCmsPackageConfig(tierKey)
+      }
+      
+      if (!tierConfig) {
         throw new Error(`Invalid tier key: ${tierKey}`)
       }
-
-      const tierConfig = getTierConfig(tierKey)!
       
       // 创建支付订单记录
-      const order = await this.createPaymentOrder(userId, tierKey, 'paypal')
+      const order = await this.createPaymentOrder(userId, tierKey, 'paypal', tierConfig)
       
       // 创建 PayPal 订单请求
       const request = new paypal.orders.OrdersCreateRequest()
