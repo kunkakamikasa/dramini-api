@@ -6,6 +6,7 @@ import dotenv from 'dotenv'
 import { ContentService } from './services/index.js'
 import { CloudflareService } from './services/cloudflare.js'
 import { PaymentService } from './services/payment.js'
+import { webhookRoutes } from './routes/webhooks.js'
 
 // Load environment variables
 dotenv.config()
@@ -167,11 +168,18 @@ fastify.get('/api/v1/payment-packages', async (request, reply) => {
   }
 })
 
+// 注册 Webhook 路由
+fastify.register(webhookRoutes)
+
 // Stripe 支付端点
 fastify.post('/api/v1/user/purchase/checkout/stripe', async (request, reply) => {
   try {
-    const payload = request.body as any
+    const payload = request.body as { tierKey: string; userId: string }
     console.log('Stripe checkout request:', payload)
+    
+    if (!payload.tierKey || !payload.userId) {
+      return reply.code(400).send({ error: 'Missing tierKey or userId' })
+    }
     
     const result = await paymentService.createStripeCheckoutSession(payload)
     return result
@@ -184,8 +192,12 @@ fastify.post('/api/v1/user/purchase/checkout/stripe', async (request, reply) => 
 // PayPal 支付端点
 fastify.post('/api/v1/user/purchase/checkout/paypal', async (request, reply) => {
   try {
-    const payload = request.body as any
+    const payload = request.body as { tierKey: string; userId: string }
     console.log('PayPal checkout request:', payload)
+    
+    if (!payload.tierKey || !payload.userId) {
+      return reply.code(400).send({ error: 'Missing tierKey or userId' })
+    }
     
     const result = await paymentService.createPayPalOrder(payload)
     return result
@@ -222,29 +234,39 @@ fastify.post('/api/v1/payment/verify/paypal', async (request, reply) => {
   }
 })
 
-// 用户金币管理端点
-fastify.post('/api/v1/user/coins/add', async (request, reply) => {
+// 获取订单状态端点
+fastify.get('/api/v1/payment/orders/:orderId', async (request, reply) => {
   try {
-    const { userId, coins, source, transactionId, planId } = request.body as {
-      userId: string
-      coins: number
-      source: string
-      transactionId: string
-      planId: string
-    }
+    const { orderId } = request.params as { orderId: string }
     
-    console.log('Adding coins to user:', { userId, coins, source, transactionId, planId })
+    const result = await paymentService.getOrderStatus(orderId)
+    return result
+  } catch (error) {
+    console.error('Get order status error:', error)
+    return reply.code(500).send({ error: 'Failed to get order status' })
+  }
+})
+
+// 获取金币套餐列表端点
+fastify.get('/api/v1/payment/tiers', async (request, reply) => {
+  try {
+    const { getAllTiers, getFirstTimeTiers, getRegularTiers } = await import('./config/payment-tiers.js')
     
-    // 这里应该更新数据库中的用户金币余额
-    // 暂时返回成功状态
+    const allTiers = getAllTiers()
+    const firstTimeTiers = getFirstTimeTiers()
+    const regularTiers = getRegularTiers()
+    
     return {
       success: true,
-      message: 'Coins added successfully',
-      newBalance: coins, // 实际应该从数据库获取
+      tiers: {
+        all: allTiers,
+        firstTime: firstTimeTiers,
+        regular: regularTiers
+      }
     }
   } catch (error) {
-    console.error('Add coins error:', error)
-    return reply.code(500).send({ error: 'Failed to add coins' })
+    console.error('Get payment tiers error:', error)
+    return reply.code(500).send({ error: 'Failed to get payment tiers' })
   }
 })
 

@@ -1,5 +1,7 @@
 import Stripe from 'stripe'
 import paypal from '@paypal/checkout-server-sdk'
+import { PrismaClient } from '@prisma/client'
+import { getTierConfig, validateTierKey, PaymentTier } from '../config/payment-tiers.js'
 
 // 初始化 Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -13,21 +15,60 @@ const environment = process.env.PAYPAL_ENVIRONMENT === 'live'
 
 const paypalClient = new paypal.core.PayPalHttpClient(environment)
 
+// 初始化 Prisma
+const prisma = new PrismaClient()
+
 export class PaymentService {
+  // 创建支付订单记录
+  private async createPaymentOrder(
+    userId: string,
+    tierKey: string,
+    provider: 'stripe' | 'paypal',
+    providerOrderId?: string
+  ) {
+    const tierConfig = getTierConfig(tierKey)
+    if (!tierConfig) {
+      throw new Error(`Invalid tier key: ${tierKey}`)
+    }
+
+    const order = await prisma.paymentOrder.create({
+      data: {
+        userId,
+        tierKey,
+        provider,
+        providerOrderId,
+        amountCents: tierConfig.priceCents,
+        coins: tierConfig.coins + tierConfig.bonusCoins,
+        status: 'pending',
+        metadata: JSON.stringify({
+          tierKey,
+          coins: tierConfig.coins,
+          bonusCoins: tierConfig.bonusCoins,
+          isFirstTime: tierConfig.isFirstTime
+        })
+      }
+    })
+
+    return order
+  }
+
   // Stripe 支付
   async createStripeCheckoutSession(payload: {
-    plan: string
-    priceCents: number
-    meta: {
-      coins: number
-      bonus: number
-      episodeId: string
-      titleId: string
-      userId?: string
-    }
+    tierKey: string
+    userId: string
   }) {
     try {
-      const { plan, priceCents, meta } = payload
+      const { tierKey, userId } = payload
+      
+      // 验证 tier_key
+      if (!validateTierKey(tierKey)) {
+        throw new Error(`Invalid tier key: ${tierKey}`)
+      }
+
+      const tierConfig = getTierConfig(tierKey)!
+      
+      // 创建支付订单记录
+      const order = await this.createPaymentOrder(userId, tierKey, 'stripe')
       
       // 创建 Stripe Checkout Session
       const session = await stripe.checkout.sessions.create({
@@ -35,12 +76,12 @@ export class PaymentService {
         line_items: [
           {
             price_data: {
-              currency: 'usd',
+              currency: tierConfig.currency.toLowerCase(),
               product_data: {
-                name: `Coin Package - ${meta.coins} Coins`,
-                description: `Get ${meta.coins} coins${meta.bonus > 0 ? ` + ${meta.bonus} bonus` : ''}`,
+                name: tierConfig.name,
+                description: tierConfig.description || `Get ${tierConfig.coins} coins${tierConfig.bonusCoins > 0 ? ` + ${tierConfig.bonusCoins} bonus` : ''}`,
               },
-              unit_amount: priceCents,
+              unit_amount: tierConfig.priceCents,
             },
             quantity: 1,
           },
@@ -49,19 +90,25 @@ export class PaymentService {
         success_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/cancel`,
         metadata: {
-          plan,
-          coins: meta.coins.toString(),
-          bonus: meta.bonus.toString(),
-          episodeId: meta.episodeId,
-          titleId: meta.titleId,
-          userId: meta.userId || 'anonymous',
+          orderId: order.id,
+          tierKey,
+          userId,
         },
+        // 设置幂等键
+        // idempotency_key: order.id, // Stripe Checkout 不支持此参数
+      })
+
+      // 更新订单的 provider_order_id
+      await prisma.paymentOrder.update({
+        where: { id: order.id },
+        data: { providerOrderId: session.id }
       })
 
       return {
         success: true,
         checkoutUrl: session.url,
         sessionId: session.id,
+        orderId: order.id,
       }
     } catch (error) {
       console.error('Stripe checkout session creation failed:', error)
@@ -71,18 +118,21 @@ export class PaymentService {
 
   // PayPal 支付
   async createPayPalOrder(payload: {
-    plan: string
-    priceCents: number
-    meta: {
-      coins: number
-      bonus: number
-      episodeId: string
-      titleId: string
-      userId?: string
-    }
+    tierKey: string
+    userId: string
   }) {
     try {
-      const { plan, priceCents, meta } = payload
+      const { tierKey, userId } = payload
+      
+      // 验证 tier_key
+      if (!validateTierKey(tierKey)) {
+        throw new Error(`Invalid tier key: ${tierKey}`)
+      }
+
+      const tierConfig = getTierConfig(tierKey)!
+      
+      // 创建支付订单记录
+      const order = await this.createPaymentOrder(userId, tierKey, 'paypal')
       
       // 创建 PayPal 订单请求
       const request = new paypal.orders.OrdersCreateRequest()
@@ -92,17 +142,14 @@ export class PaymentService {
         purchase_units: [
           {
             amount: {
-              currency_code: 'USD',
-              value: (priceCents / 100).toFixed(2),
+              currency_code: tierConfig.currency,
+              value: (tierConfig.priceCents / 100).toFixed(2),
             },
-            description: `Coin Package - ${meta.coins} Coins${meta.bonus > 0 ? ` + ${meta.bonus} bonus` : ''}`,
+            description: tierConfig.description || `Get ${tierConfig.coins} coins${tierConfig.bonusCoins > 0 ? ` + ${tierConfig.bonusCoins} bonus` : ''}`,
             custom_id: JSON.stringify({
-              plan,
-              coins: meta.coins,
-              bonus: meta.bonus,
-              episodeId: meta.episodeId,
-              titleId: meta.titleId,
-              userId: meta.userId || 'anonymous',
+              orderId: order.id,
+              tierKey,
+              userId,
             }),
           },
         ],
@@ -110,6 +157,7 @@ export class PaymentService {
           brand_name: 'Dramini',
           landing_page: 'NO_PREFERENCE',
           user_action: 'PAY_NOW',
+          shipping_preference: 'NO_SHIPPING', // 数字商品不需要地址
           return_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/success?order_id={order_id}`,
           cancel_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/cancel`,
         },
@@ -118,11 +166,19 @@ export class PaymentService {
       const response = await paypalClient.execute(request)
       
       if (response.statusCode === 201) {
-        const order = response.result
+        const paypalOrder = response.result
+        
+        // 更新订单的 provider_order_id
+        await prisma.paymentOrder.update({
+          where: { id: order.id },
+          data: { providerOrderId: paypalOrder.id }
+        })
+        
         return {
           success: true,
-          checkoutUrl: order.links?.find((link: any) => link.rel === 'approve')?.href,
+          checkoutUrl: paypalOrder.links?.find((link: any) => link.rel === 'approve')?.href,
           orderId: order.id,
+          paypalOrderId: paypalOrder.id,
         }
       } else {
         throw new Error(`PayPal order creation failed: ${response.statusCode}`)
@@ -133,23 +189,110 @@ export class PaymentService {
     }
   }
 
-  // 验证 Stripe 支付
+  // 处理支付成功 - 加金币（幂等）
+  async processPaymentSuccess(
+    orderId: string,
+    providerEventId: string,
+    provider: 'stripe' | 'paypal'
+  ) {
+    try {
+      // 检查订单是否已处理（幂等）
+      const existingOrder = await prisma.paymentOrder.findFirst({
+        where: {
+          OR: [
+            { id: orderId },
+            { providerEventId }
+          ]
+        }
+      })
+
+      if (!existingOrder) {
+        throw new Error(`Order not found: ${orderId}`)
+      }
+
+      if (existingOrder.status === 'completed') {
+        console.log(`Order already processed: ${orderId}`)
+        return {
+          success: true,
+          alreadyProcessed: true,
+          order: existingOrder
+        }
+      }
+
+      // 使用事务确保原子性
+      const result = await prisma.$transaction(async (tx) => {
+        // 更新订单状态
+        const updatedOrder = await tx.paymentOrder.update({
+          where: { id: orderId },
+          data: {
+            status: 'completed',
+            providerEventId,
+            completedAt: new Date()
+          }
+        })
+
+        // 获取或创建用户金币记录
+        const userCoins = await tx.userCoins.upsert({
+          where: { userId: updatedOrder.userId },
+          update: {
+            balance: {
+              increment: updatedOrder.coins
+            }
+          },
+          create: {
+            userId: updatedOrder.userId,
+            balance: updatedOrder.coins
+          }
+        })
+
+        // 创建金币交易记录
+        const transaction = await tx.coinTransaction.create({
+          data: {
+            userId: updatedOrder.userId,
+            orderId: updatedOrder.id,
+            coins: updatedOrder.coins,
+            transactionType: 'purchase',
+            description: `Purchase: ${updatedOrder.tierKey}`
+          }
+        })
+
+        return {
+          order: updatedOrder,
+          userCoins,
+          transaction
+        }
+      })
+
+      console.log(`Payment processed successfully: ${orderId}, coins added: ${result.order.coins}`)
+      
+      return {
+        success: true,
+        alreadyProcessed: false,
+        order: result.order,
+        userCoins: result.userCoins,
+        transaction: result.transaction
+      }
+    } catch (error) {
+      console.error('Payment processing failed:', error)
+      throw error
+    }
+  }
+
+  // 验证 Stripe 支付（仅用于前端展示）
   async verifyStripePayment(sessionId: string) {
     try {
       const session = await stripe.checkout.sessions.retrieve(sessionId)
       
-      if (session.payment_status === 'paid') {
-        return {
-          success: true,
-          session,
-          metadata: session.metadata,
-        }
-      } else {
-        return {
-          success: false,
-          session,
-          metadata: session.metadata,
-        }
+      // 查找对应的订单
+      const order = await prisma.paymentOrder.findFirst({
+        where: { providerOrderId: sessionId }
+      })
+
+      return {
+        success: session.payment_status === 'paid',
+        session,
+        order,
+        metadata: session.metadata,
       }
     } catch (error) {
       console.error('Stripe payment verification failed:', error)
@@ -157,18 +300,25 @@ export class PaymentService {
     }
   }
 
-  // 验证 PayPal 支付
+  // 验证 PayPal 支付（仅用于前端展示）
   async verifyPayPalPayment(orderId: string) {
     try {
       const request = new paypal.orders.OrdersGetRequest(orderId)
       const response = await paypalClient.execute(request)
       
       if (response.statusCode === 200) {
-        const order = response.result
+        const paypalOrder = response.result
+        
+        // 查找对应的订单
+        const order = await prisma.paymentOrder.findFirst({
+          where: { providerOrderId: orderId }
+        })
+        
         return {
-          success: order.status === 'COMPLETED',
-          order,
-          metadata: order.purchase_units?.[0]?.custom_id ? JSON.parse(order.purchase_units[0].custom_id) : {},
+          success: paypalOrder.status === 'COMPLETED',
+          order: paypalOrder,
+          internalOrder: order,
+          metadata: paypalOrder.purchase_units?.[0]?.custom_id ? JSON.parse(paypalOrder.purchase_units[0].custom_id) : {},
         }
       } else {
         throw new Error(`PayPal order verification failed: ${response.statusCode}`)
@@ -176,6 +326,30 @@ export class PaymentService {
     } catch (error) {
       console.error('PayPal payment verification failed:', error)
       throw new Error('Failed to verify PayPal payment')
+    }
+  }
+
+  // 获取订单状态
+  async getOrderStatus(orderId: string) {
+    try {
+      const order = await prisma.paymentOrder.findUnique({
+        where: { id: orderId },
+        include: {
+          coinTransactions: true
+        }
+      })
+
+      if (!order) {
+        throw new Error(`Order not found: ${orderId}`)
+      }
+
+      return {
+        success: true,
+        order
+      }
+    } catch (error) {
+      console.error('Get order status failed:', error)
+      throw error
     }
   }
 

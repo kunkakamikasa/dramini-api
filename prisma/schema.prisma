@@ -360,3 +360,54 @@ model SectionContent {
 
   @@map("section_content")
 }
+
+// 支付订单表
+model PaymentOrder {
+  id                String   @id @default(cuid())
+  userId            String
+  tierKey           String   @map("tier_key")
+  provider          String   // 'stripe' | 'paypal'
+  providerOrderId   String?  @map("provider_order_id")
+  providerEventId   String?  @map("provider_event_id")
+  amountCents       Int      @map("amount_cents")
+  coins             Int
+  status            String   @default("pending") // 'pending' | 'completed' | 'failed' | 'refunded'
+  metadata          String?  // JSON string for additional data
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  completedAt       DateTime? @map("completed_at")
+  
+  // 关联的金币交易记录
+  coinTransactions  CoinTransaction[]
+
+  @@unique([provider, providerOrderId])
+  @@unique([provider, providerEventId])
+  @@map("payment_orders")
+}
+
+// 金币交易记录表
+model CoinTransaction {
+  id              String        @id @default(cuid())
+  userId          String        @map("user_id")
+  orderId         String        @map("order_id")
+  coins           Int
+  transactionType String        @map("transaction_type") // 'purchase' | 'refund' | 'bonus'
+  description     String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  
+  // 关联的支付订单
+  order           PaymentOrder  @relation(fields: [orderId], references: [id])
+
+  @@map("coin_transactions")
+}
+
+// 用户金币余额表
+model UserCoins {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  balance   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_coins")
+}
