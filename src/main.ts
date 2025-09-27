@@ -165,6 +165,46 @@ fastify.get('/api/v1/payment-packages', async (request, reply) => {
   }
 })
 
+// Stripe 支付端点
+fastify.post('/api/v1/user/purchase/checkout/stripe', async (request, reply) => {
+  try {
+    const payload = request.body as any
+    console.log('Stripe checkout request:', payload)
+    
+    // 这里应该集成 Stripe SDK 创建支付会话
+    // 暂时返回模拟的 checkout URL
+    const checkoutUrl = `https://checkout.stripe.com/pay/cs_test_${Date.now()}`
+    
+    return {
+      success: true,
+      checkoutUrl: checkoutUrl
+    }
+  } catch (error) {
+    console.error('Stripe checkout error:', error)
+    return reply.code(500).send({ error: 'Stripe checkout failed' })
+  }
+})
+
+// PayPal 支付端点
+fastify.post('/api/v1/user/purchase/checkout/paypal', async (request, reply) => {
+  try {
+    const payload = request.body as any
+    console.log('PayPal checkout request:', payload)
+    
+    // 这里应该集成 PayPal SDK 创建支付会话
+    // 暂时返回模拟的 checkout URL
+    const checkoutUrl = `https://www.paypal.com/checkoutnow?token=${Date.now()}`
+    
+    return {
+      success: true,
+      checkoutUrl: checkoutUrl
+    }
+  } catch (error) {
+    console.error('PayPal checkout error:', error)
+    return reply.code(500).send({ error: 'PayPal checkout failed' })
+  }
+})
+
 // Start server
 const start = async () => {
   try {
