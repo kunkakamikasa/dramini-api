@@ -42,7 +42,7 @@ export class ContentService {
             ];
         }
 
-        return await prisma.title.findMany({
+        const titles = await prisma.title.findMany({
             where,
             include: {
                 episodes: {
@@ -52,11 +52,22 @@ export class ContentService {
             },
             orderBy: { createdAt: 'desc' }
         });
+
+        // 处理免费集数逻辑
+        return titles.map(title => ({
+            ...title,
+            episodes: title.episodes.map(episode => ({
+                ...episode,
+                isFree: episode.epNumber <= (title.freeUntilEpisode || 0),
+                episodeNum: episode.epNumber,
+                priceCoins: episode.priceCents || 100
+            }))
+        }));
     }
 
     // 根据slug获取标题详情
     async getTitleBySlug(slug: string) {
-        return await prisma.title.findUnique({
+        const title = await prisma.title.findUnique({
             where: { slug },
             include: {
                 episodes: {
@@ -65,6 +76,19 @@ export class ContentService {
                 category: true
             }
         });
+
+        if (!title) return null;
+
+        // 处理免费集数逻辑
+        return {
+            ...title,
+            episodes: title.episodes.map(episode => ({
+                ...episode,
+                isFree: episode.epNumber <= (title.freeUntilEpisode || 0),
+                episodeNum: episode.epNumber,
+                priceCoins: episode.priceCents || 100
+            }))
+        };
     }
 
     // 获取新发布内容

@@ -113,6 +113,8 @@ model Title {
   rating         Float?
   featuredWeight Int              @default(0)
   categoryId     String?
+  freeUntilEpisode Int?           @map("freeUntilEpisode")
+  bundlePriceCoins Int?           @map("bundlePriceCoins")
   collections    CollectionItem[]
   episodes       Episode[]
   flagReports    FlagReport[]
