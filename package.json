@@ -29,7 +29,6 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
-    "@types/paypal__checkout-server-sdk": "^1.0.8",
     "prisma": "5.19.1",
     "tsx": "^4.7.1",
     "typescript": "^5.5.3"
