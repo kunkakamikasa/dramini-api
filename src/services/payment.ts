@@ -225,7 +225,7 @@ export class PaymentService {
           landing_page: 'NO_PREFERENCE',
           user_action: 'PAY_NOW',
           shipping_preference: 'NO_SHIPPING', // 数字商品不需要地址
-          return_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/success?order_id={order_id}`,
+          return_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/success`,
           cancel_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/cancel`,
         },
       }
