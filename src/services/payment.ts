@@ -52,6 +52,7 @@ export class PaymentService {
   private async getCmsPackageConfig(packageId: string): Promise<PaymentTier | null> {
     try {
       const cmsBase = process.env.CMS_BASE_URL || 'https://cms.shortdramini.com'
+      console.log('Fetching packages from CMS:', `${cmsBase}/api/payment-packages`)
       const response = await fetch(`${cmsBase}/api/payment-packages`)
       
       if (!response.ok) {
@@ -60,23 +61,40 @@ export class PaymentService {
       }
       
       const packages = await response.json()
+      console.log('CMS packages response:', JSON.stringify(packages, null, 2))
+      
       const pkg = packages.find((p: any) => p.id === packageId)
+      console.log('Found package for ID', packageId, ':', JSON.stringify(pkg, null, 2))
       
       if (!pkg) {
+        console.log('Package not found for ID:', packageId)
         return null
       }
       
-      // 转换为 PaymentTier 格式
-      return {
+      // 验证必要字段 - 使用CMS实际返回的字段名
+      if (typeof pkg.baseCoins !== 'number' || typeof pkg.priceUsd !== 'number') {
+        console.error('Invalid package data - missing baseCoins or priceUsd:', {
+          baseCoins: pkg.baseCoins,
+          priceUsd: pkg.priceUsd,
+          bonusCoins: pkg.bonusCoins
+        })
+        return null
+      }
+      
+      // 转换为 PaymentTier 格式 - 使用CMS实际返回的字段名
+      const tierConfig = {
         key: pkg.id,
         name: pkg.name,
-        coins: pkg.coins,
-        bonusCoins: pkg.bonus,
-        priceCents: Math.round(pkg.price * 100), // 转换为分
+        coins: pkg.baseCoins || 0,
+        bonusCoins: pkg.bonusCoins || 0,
+        priceCents: pkg.priceUsd || 0, // CMS已经返回美分，不需要转换
         currency: 'USD',
-        isFirstTime: pkg.isNewUser,
-        description: pkg.description
+        isFirstTime: pkg.isFirstTime || false,
+        description: pkg.description || ''
       }
+      
+      console.log('Converted tier config:', JSON.stringify(tierConfig, null, 2))
+      return tierConfig
     } catch (error) {
       console.error('Failed to fetch CMS package config:', error)
       return null
@@ -159,13 +177,17 @@ export class PaymentService {
   }) {
     try {
       const { tierKey, userId } = payload
+      console.log('PayPal order creation started:', { tierKey, userId })
       
       // 获取套餐配置 - 支持硬编码和CMS动态套餐
       let tierConfig = getTierConfig(tierKey)
+      console.log('Hardcoded tier config:', tierConfig)
       
       // 如果不是硬编码套餐，尝试从CMS获取
       if (!tierConfig) {
+        console.log('Fetching tier config from CMS for:', tierKey)
         tierConfig = await this.getCmsPackageConfig(tierKey)
+        console.log('CMS tier config:', tierConfig)
       }
       
       if (!tierConfig) {
@@ -173,12 +195,16 @@ export class PaymentService {
       }
       
       // 创建支付订单记录
+      console.log('Creating payment order...')
       const order = await this.createPaymentOrder(userId, tierKey, 'paypal', tierConfig)
+      console.log('Payment order created:', order.id)
       
       // 创建 PayPal 订单请求
+      console.log('Creating PayPal order request...')
       const request = new paypal.orders.OrdersCreateRequest()
       request.prefer('return=representation')
-      request.requestBody({
+      
+      const requestBody = {
         intent: 'CAPTURE',
         purchase_units: [
           {
@@ -202,9 +228,14 @@ export class PaymentService {
           return_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/success?order_id={order_id}`,
           cancel_url: `${process.env.WEB_BASE_URL || 'https://shortdramini.com'}/payment/cancel`,
         },
-      })
+      }
+      
+      console.log('PayPal request body:', JSON.stringify(requestBody, null, 2))
+      request.requestBody(requestBody)
 
+      console.log('Executing PayPal request...')
       const response = await paypalClient.execute(request)
+      console.log('PayPal response status:', response.statusCode)
       
       if (response.statusCode === 201) {
         const paypalOrder = response.result
@@ -222,10 +253,17 @@ export class PaymentService {
           paypalOrderId: paypalOrder.id,
         }
       } else {
+        console.error('PayPal order creation failed with status:', response.statusCode)
+        console.error('PayPal response:', JSON.stringify(response, null, 2))
         throw new Error(`PayPal order creation failed: ${response.statusCode}`)
       }
     } catch (error) {
       console.error('PayPal order creation failed:', error)
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined
+      })
       throw new Error('Failed to create PayPal order')
     }
   }
