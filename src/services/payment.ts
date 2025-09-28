@@ -456,5 +456,5 @@ export class PaymentService {
       console.error('PayPal payment capture failed:', error)
       throw new Error('Failed to capture PayPal payment')
     }
-  }
+    }
 }

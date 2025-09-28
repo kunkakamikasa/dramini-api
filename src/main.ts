@@ -7,6 +7,7 @@ import { ContentService } from './services/index.js'
 import { CloudflareService } from './services/cloudflare.js'
 import { PaymentService } from './services/payment.js'
 import { webhookRoutes } from './routes/webhooks.js'
+import { userRoutes } from './routes/users.js'
 
 // Load environment variables
 dotenv.config()
@@ -170,6 +171,9 @@ fastify.get('/api/v1/payment-packages', async (request, reply) => {
 
 // 注册 Webhook 路由
 fastify.register(webhookRoutes)
+
+// 注册用户路由
+fastify.register(userRoutes)
 
 // Stripe 支付端点
 fastify.post('/api/v1/user/purchase/checkout/stripe', async (request, reply) => {
