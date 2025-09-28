@@ -18,11 +18,24 @@ const paypalClient = new paypal.core.PayPalHttpClient(environment)
 const paymentService = new PaymentService()
 
 export async function webhookRoutes(fastify: FastifyInstance) {
-  // Stripe Webhook 处理
-  fastify.post('/api/v1/webhooks/stripe', async (request, reply) => {
+  // Stripe Webhook 处理 - 需要原始请求体进行签名验证
+  fastify.post('/api/v1/webhooks/stripe', {
+    schema: {
+      body: {
+        type: 'string'
+      }
+    }
+  }, async (request, reply) => {
     try {
-      const body = request.body as Buffer
+      // 获取原始请求体字符串
+      const body = request.body as string
       const signature = request.headers['stripe-signature'] as string
+
+      console.log('🔍 Stripe webhook received:', {
+        signature: signature?.substring(0, 20) + '...',
+        bodyLength: body?.length,
+        contentType: request.headers['content-type']
+      })
 
       if (!signature) {
         console.error('Missing Stripe signature header')

@@ -23,7 +23,10 @@ const fastify = Fastify({
     transport: {
       target: 'pino-pretty'
     }
-  }
+  },
+  // 配置原始请求体处理
+  bodyLimit: 1048576, // 1MB
+  disableRequestLogging: false
 })
 
 // Register plugins
