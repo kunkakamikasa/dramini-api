@@ -199,4 +199,60 @@ export async function userRoutes(fastify: FastifyInstance) {
       })
     }
   })
+
+  // 获取用户资料
+  fastify.get('/api/v1/user/profile', async (request, reply) => {
+    try {
+      const { userId } = request.query as { userId: string }
+      
+      console.log('User profile request for userId:', userId)
+      
+      if (!userId) {
+        return reply.code(400).send({ 
+          error: 'Missing userId',
+          message: 'userId parameter is required'
+        })
+      }
+      
+      // 从数据库获取用户信息
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          createdAt: true
+        }
+      })
+      
+      if (!user) {
+        return reply.code(404).send({ 
+          error: 'User not found',
+          message: 'No user found with the provided userId'
+        })
+      }
+      
+      // 获取用户金币余额
+      const userCoins = await prisma.userCoins.findUnique({
+        where: { userId: user.id }
+      })
+      
+      console.log('User profile retrieved successfully:', user.id)
+      
+      return {
+        id: user.id,
+        name: user.name || '',
+        email: user.email,
+        coins: userCoins?.balance || 0,
+        watchHistory: [], // TODO: 实现观看历史
+        createdAt: user.createdAt
+      }
+    } catch (error) {
+      console.error('User profile error:', error)
+      return reply.code(500).send({ 
+        error: 'Failed to get profile',
+        message: 'Database error occurred'
+      })
+    }
+  })
 }
