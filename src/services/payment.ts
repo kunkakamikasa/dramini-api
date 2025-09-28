@@ -388,22 +388,30 @@ export class PaymentService {
         where: { providerOrderId: sessionId }
       })
 
+      if (!order) {
+        throw new Error('Order not found')
+      }
+
       // 获取套餐信息
       let tierInfo = null
-      if (order?.tierKey) {
+      if (order.tierKey) {
         tierInfo = await this.getCmsPackageConfig(order.tierKey)
       }
 
+      // 获取用户当前余额
+      const userCoins = await prisma.userCoins.findUnique({
+        where: { userId: order.userId }
+      })
+
       return {
         success: session.payment_status === 'paid',
-        session,
-        order,
-        metadata: {
-          coins: tierInfo?.coins || order?.coins || 0,
-          bonus: tierInfo?.bonusCoins || 0,
-          plan: tierInfo?.name || 'Unknown',
-          ...session.metadata
-        }
+        alreadyProcessed: order.status === 'completed',
+        orderId: order.id,
+        plan: tierInfo?.name || 'Unknown',
+        creditedCoins: order.coins, // 本次入账的金币
+        balance: userCoins?.balance || 0, // 用户当前余额
+        sessionId: sessionId,
+        paymentIntentId: session.payment_intent as string
       }
     } catch (error) {
       console.error('Stripe payment verification failed:', error)
