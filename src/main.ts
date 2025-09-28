@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import multipart from '@fastify/multipart'
+import rawBody from 'fastify-raw-body'
 import dotenv from 'dotenv'
 import { ContentService } from './services/index.js'
 import { CloudflareService } from './services/cloudflare.js'
@@ -50,6 +51,15 @@ fastify.register(multipart, {
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
   }
+})
+
+// Register raw body plugin for webhook signature verification
+fastify.register(rawBody, {
+  field: 'rawBody', // change the default file.rawBody property name
+  global: false, // don't register to all routes
+  encoding: 'utf8', // set it to false to set rawBody as a Buffer
+  runFirst: true, // get the body before any preHandler hook change/uncompress it
+  routes: ['/api/v1/webhooks/stripe'] // only for webhook routes
 })
 
 // Health route

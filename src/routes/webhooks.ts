@@ -22,8 +22,9 @@ export async function webhookRoutes(fastify: FastifyInstance) {
   fastify.post('/api/v1/webhooks/stripe', async (request, reply) => {
     try {
       console.log('🚀 Stripe webhook endpoint hit!')
-      // 获取原始请求体 - 手动读取原始数据
-      const body = await request.body
+      
+      // 获取原始请求体 - 从 rawBody 获取
+      const rawBody = (request as any).rawBody
       const signatureHeader = request.headers['stripe-signature']
       const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader
 
@@ -35,9 +36,9 @@ export async function webhookRoutes(fastify: FastifyInstance) {
       })
 
       console.log('🔍 Stripe webhook body analysis:', {
-        bodyType: typeof body,
-        bodyLength: typeof body === 'string' ? body.length : JSON.stringify(body).length,
-        bodyPreview: typeof body === 'string' ? body.substring(0, 100) + '...' : JSON.stringify(body).substring(0, 100) + '...'
+        bodyType: typeof rawBody,
+        bodyLength: typeof rawBody === 'string' ? rawBody.length : JSON.stringify(rawBody).length,
+        bodyPreview: typeof rawBody === 'string' ? rawBody.substring(0, 100) + '...' : JSON.stringify(rawBody).substring(0, 100) + '...'
       })
 
       if (!signature) {
@@ -56,8 +57,8 @@ export async function webhookRoutes(fastify: FastifyInstance) {
       let event: Stripe.Event
 
       try {
-        // 将请求体转换为字符串进行签名验证
-        const bodyString = typeof body === 'string' ? body : JSON.stringify(body)
+        // 使用原始请求体进行签名验证
+        const bodyString = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody)
         console.log('🔍 Attempting signature verification with:', {
           bodyStringLength: bodyString.length,
           signatureLength: signature.length,
