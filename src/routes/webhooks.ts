@@ -19,19 +19,15 @@ const paymentService = new PaymentService()
 
 export async function webhookRoutes(fastify: FastifyInstance) {
   // Stripe Webhook 处理 - 需要原始请求体进行签名验证
-  fastify.post('/api/v1/webhooks/stripe', {
-    config: {
-      rawBody: true
-    }
-  }, async (request, reply) => {
+  fastify.post('/api/v1/webhooks/stripe', async (request, reply) => {
     try {
-      // 获取原始请求体
-      const body = request.rawBody as Buffer
+      // 获取原始请求体 - 手动读取原始数据
+      const body = await request.body
       const signature = request.headers['stripe-signature'] as string
 
       console.log('🔍 Stripe webhook received:', {
         signature: signature?.substring(0, 20) + '...',
-        bodyLength: body?.length,
+        bodyType: typeof body,
         contentType: request.headers['content-type']
       })
 
@@ -49,9 +45,12 @@ export async function webhookRoutes(fastify: FastifyInstance) {
       let event: Stripe.Event
 
       try {
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+        // 将请求体转换为字符串进行签名验证
+        const bodyString = typeof body === 'string' ? body : JSON.stringify(body)
+        event = stripe.webhooks.constructEvent(bodyString, signature, webhookSecret)
+        console.log('✅ Stripe webhook signature verified:', event.type, event.id)
       } catch (err: any) {
-        console.error(`Stripe webhook signature verification failed: ${err.message}`)
+        console.error(`❌ Stripe webhook signature verification failed: ${err.message}`)
         return reply.code(400).send({ error: `Webhook Error: ${err.message}` })
       }
 

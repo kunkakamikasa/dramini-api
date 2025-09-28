@@ -2,7 +2,6 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import multipart from '@fastify/multipart'
-import rawBody from 'fastify-raw-body'
 import dotenv from 'dotenv'
 import { ContentService } from './services/index.js'
 import { CloudflareService } from './services/cloudflare.js'
@@ -51,14 +50,6 @@ fastify.register(multipart, {
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
   }
-})
-
-// 注册原始请求体插件
-fastify.register(rawBody, {
-  field: 'rawBody', // 将原始请求体存储在 request.rawBody
-  global: false, // 不全局启用，只在需要时使用
-  encoding: 'utf8', // 编码方式
-  runFirst: true // 在其他插件之前运行
 })
 
 // Health route
