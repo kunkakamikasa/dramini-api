@@ -108,23 +108,31 @@ export class PaymentService {
   }) {
     try {
       const { tierKey, userId } = payload
+      console.log('🔍 Stripe checkout session creation started:', { tierKey, userId })
       
       // 获取套餐配置 - 支持硬编码和CMS动态套餐
       let tierConfig = getTierConfig(tierKey)
+      console.log('🔍 Hardcoded tier config:', tierConfig)
       
       // 如果不是硬编码套餐，尝试从CMS获取
       if (!tierConfig) {
+        console.log('🔍 Fetching tier config from CMS for:', tierKey)
         tierConfig = await this.getCmsPackageConfig(tierKey)
+        console.log('🔍 CMS tier config:', tierConfig)
       }
       
       if (!tierConfig) {
+        console.log('❌ Invalid tier key:', tierKey)
         throw new Error(`Invalid tier key: ${tierKey}`)
       }
       
       // 创建支付订单记录
+      console.log('🔍 Creating payment order...')
       const order = await this.createPaymentOrder(userId, tierKey, 'stripe', tierConfig)
+      console.log('🔍 Payment order created:', order.id)
       
       // 创建 Stripe Checkout Session
+      console.log('🔍 Creating Stripe checkout session...')
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [
@@ -152,6 +160,14 @@ export class PaymentService {
         // idempotency_key: order.id, // Stripe Checkout 不支持此参数
       })
 
+      console.log('✅ Stripe checkout session created:', {
+        sessionId: session.id,
+        orderId: order.id,
+        checkoutUrl: session.url,
+        amount: tierConfig.priceCents,
+        coins: tierConfig.coins + tierConfig.bonusCoins
+      })
+
       // 更新订单的 provider_order_id
       await prisma.paymentOrder.update({
         where: { id: order.id },
@@ -165,7 +181,12 @@ export class PaymentService {
         orderId: order.id,
       }
     } catch (error) {
-      console.error('Stripe checkout session creation failed:', error)
+      console.error('❌ Stripe checkout session creation failed:', error)
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined
+      })
       throw new Error('Failed to create Stripe checkout session')
     }
   }
