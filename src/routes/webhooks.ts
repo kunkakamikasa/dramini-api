@@ -19,10 +19,14 @@ const paymentService = new PaymentService()
 
 export async function webhookRoutes(fastify: FastifyInstance) {
   // Stripe Webhook 处理 - 需要原始请求体进行签名验证
-  fastify.post('/api/v1/webhooks/stripe', async (request, reply) => {
+  fastify.post('/api/v1/webhooks/stripe', {
+    config: {
+      rawBody: true
+    }
+  }, async (request, reply) => {
     try {
-      // 获取原始请求体 - 将JSON对象转换为字符串进行签名验证
-      const body = JSON.stringify(request.body)
+      // 获取原始请求体
+      const body = request.rawBody as Buffer
       const signature = request.headers['stripe-signature'] as string
 
       console.log('🔍 Stripe webhook received:', {
