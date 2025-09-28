@@ -124,7 +124,7 @@ export async function webhookRoutes(fastify: FastifyInstance) {
         return reply.code(400).send({ error: 'Invalid webhook ID' })
       }
 
-      // 验证 PayPal Webhook 签名（暂时禁用以调试）
+      // 验证 PayPal Webhook 签名
       console.log('PayPal webhook headers:', {
         transmissionId,
         webhookId,
@@ -134,21 +134,20 @@ export async function webhookRoutes(fastify: FastifyInstance) {
         authAlgo
       })
       
-      // 暂时跳过签名验证以调试
-      // const isValid = await verifyPayPalWebhook(
-      //   body,
-      //   transmissionId,
-      //   transmissionTime,
-      //   transmissionSig,
-      //   certUrl,
-      //   authAlgo,
-      //   webhookId
-      // )
+      const isValid = await verifyPayPalWebhook(
+        body,
+        transmissionId,
+        transmissionTime,
+        transmissionSig,
+        certUrl,
+        authAlgo,
+        webhookId
+      )
       
-      // if (!isValid) {
-      //   console.error('Invalid PayPal webhook signature')
-      //   return reply.code(400).send({ error: 'Invalid signature' })
-      // }
+      if (!isValid) {
+        console.error('Invalid PayPal webhook signature')
+        return reply.code(400).send({ error: 'Invalid signature' })
+      }
 
       const event = JSON.parse(body)
       console.log('PayPal webhook received:', event.event_type, event.id)
