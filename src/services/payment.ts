@@ -388,11 +388,22 @@ export class PaymentService {
         where: { providerOrderId: sessionId }
       })
 
+      // 获取套餐信息
+      let tierInfo = null
+      if (order?.tierKey) {
+        tierInfo = await this.getCmsPackageConfig(order.tierKey)
+      }
+
       return {
         success: session.payment_status === 'paid',
         session,
         order,
-        metadata: session.metadata,
+        metadata: {
+          coins: tierInfo?.coins || order?.coins || 0,
+          bonus: tierInfo?.bonusCoins || 0,
+          plan: tierInfo?.name || 'Unknown',
+          ...session.metadata
+        }
       }
     } catch (error) {
       console.error('Stripe payment verification failed:', error)
