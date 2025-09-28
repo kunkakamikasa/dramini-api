@@ -22,16 +22,17 @@ export async function webhookRoutes(fastify: FastifyInstance) {
   fastify.post('/api/v1/webhook/stripe', async (request, reply) => {
     try {
       console.log('🚀 Stripe webhook endpoint hit!')
+      // 获取原始请求体 - 手动读取原始数据
+      const body = await request.body
+      const signatureHeader = request.headers['stripe-signature']
+      const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader
+
       console.log('📋 Request headers:', {
         'content-type': request.headers['content-type'],
-        'stripe-signature': request.headers['stripe-signature']?.substring(0, 20) + '...',
+        'stripe-signature': signature ? signature.substring(0, 20) + '...' : 'missing',
         'user-agent': request.headers['user-agent'],
         'content-length': request.headers['content-length']
       })
-
-      // 获取原始请求体 - 手动读取原始数据
-      const body = await request.body
-      const signature = request.headers['stripe-signature'] as string
 
       console.log('🔍 Stripe webhook body analysis:', {
         bodyType: typeof body,
