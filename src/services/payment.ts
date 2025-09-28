@@ -435,21 +435,34 @@ export class PaymentService {
   // 捕获 PayPal 支付
   async capturePayPalPayment(orderId: string) {
     try {
+      console.log('Capturing PayPal order:', orderId)
+      
       const request = new paypal.orders.OrdersCaptureRequest(orderId)
-      request.requestBody({
-        payment_source: {} as any
-      })
+      request.requestBody({}) // PayPal捕获请求不需要特殊参数
       
       const response = await paypalClient.execute(request)
       
+      console.log('PayPal capture response status:', response.statusCode)
+      console.log('PayPal capture response:', JSON.stringify(response.result, null, 2))
+      
       if (response.statusCode === 201) {
         const order = response.result
+        const captureId = order.purchase_units?.[0]?.payments?.captures?.[0]?.id
+        
+        console.log('PayPal capture successful:', {
+          orderId: order.id,
+          captureId,
+          status: order.status
+        })
+        
         return {
           success: true,
           order,
-          captureId: order.purchase_units?.[0]?.payments?.captures?.[0]?.id,
+          captureId,
         }
       } else {
+        console.error('PayPal capture failed with status:', response.statusCode)
+        console.error('PayPal capture response:', JSON.stringify(response, null, 2))
         throw new Error(`PayPal payment capture failed: ${response.statusCode}`)
       }
     } catch (error) {
