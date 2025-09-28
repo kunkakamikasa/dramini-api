@@ -18,54 +18,36 @@ const paypalClient = new paypal.core.PayPalHttpClient(environment)
 const paymentService = new PaymentService()
 
 export async function webhookRoutes(fastify: FastifyInstance) {
-  // Stripe Webhook 处理 - 需要原始请求体进行签名验证
-  fastify.post('/api/v1/webhooks/stripe', async (request, reply) => {
-    try {
-      console.log('🚀 Stripe webhook endpoint hit!')
-      
-      // 获取原始请求体 - 从 rawBody 获取
-      const rawBody = (request as any).rawBody
-      const signatureHeader = request.headers['stripe-signature']
-      const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader
+  // Stripe Webhook 处理 - 子实例隔离解析器，确保原始字节
+  fastify.register(async (scope) => {
+    // 只在这个子实例里禁用默认解析器，强制把所有 content-type 解析成 Buffer
+    scope.removeAllContentTypeParsers()
+    scope.addContentTypeParser('*', { parseAs: 'buffer' }, (req, body, done) => {
+      done(null, body) // 保持原样 Buffer
+    })
 
-      console.log('📋 Request headers:', {
-        'content-type': request.headers['content-type'],
-        'stripe-signature': signature ? signature.substring(0, 20) + '...' : 'missing',
-        'user-agent': request.headers['user-agent'],
-        'content-length': request.headers['content-length']
-      })
+    scope.post('/api/v1/webhooks/stripe', async (req, reply) => {
+      const sig = req.headers['stripe-signature']
+      if (!sig) return reply.code(400).send('Missing Stripe-Signature')
 
-      console.log('🔍 Stripe webhook body analysis:', {
-        bodyType: typeof rawBody,
-        bodyLength: typeof rawBody === 'string' ? rawBody.length : JSON.stringify(rawBody).length,
-        bodyPreview: typeof rawBody === 'string' ? rawBody.substring(0, 100) + '...' : JSON.stringify(rawBody).substring(0, 100) + '...'
-      })
+      // 这里一定是 Buffer，千万别 toString()/JSON.parse()/JSON.stringify()
+      const raw = req.body as Buffer
 
-      if (!signature) {
-        console.error('❌ Missing Stripe signature header')
-        return reply.code(400).send({ error: 'Missing signature' })
+      // 自检一致性，出问题直接打印并 400
+      const hdrLen = Number(req.headers['content-length'] || 0)
+      if (!Buffer.isBuffer(raw) || (hdrLen && raw.length !== hdrLen)) {
+        console.error('RAW MISMATCH', { isBuffer: Buffer.isBuffer(raw), rawLen: raw?.length, hdrLen })
+        return reply.code(400).send('Invalid raw body')
       }
-
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-      if (!webhookSecret) {
-        console.error('❌ STRIPE_WEBHOOK_SECRET not configured')
-        return reply.code(500).send({ error: 'Webhook secret not configured' })
-      }
-
-      console.log('🔐 Webhook secret configured:', webhookSecret.substring(0, 10) + '...')
-
-      let event: Stripe.Event
 
       try {
-        // 使用原始请求体进行签名验证
-        const bodyString = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody)
-        console.log('🔍 Attempting signature verification with:', {
-          bodyStringLength: bodyString.length,
-          signatureLength: signature.length,
-          webhookSecretLength: webhookSecret.length
-        })
-        
-        event = stripe.webhooks.constructEvent(bodyString, signature, webhookSecret)
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-08-27.basil' })
+        const event = stripe.webhooks.constructEvent(
+          raw,
+          sig as string,
+          process.env.STRIPE_WEBHOOK_SECRET! // 来自"沙盒/Test mode"端点的 whsec_...
+        )
+
         console.log('✅ Stripe webhook signature verified successfully!')
         console.log('📊 Event details:', {
           type: event.type,
@@ -73,100 +55,69 @@ export async function webhookRoutes(fastify: FastifyInstance) {
           created: event.created,
           livemode: event.livemode
         })
+
+        // 幂等处理（建议根据 event.id 或对象 id 去重）
+        switch (event.type) {
+          case 'checkout.session.completed':
+            console.log('💳 Processing checkout.session.completed event')
+            const session = event.data.object as Stripe.Checkout.Session
+            
+            if (session.payment_status === 'paid' && session.metadata?.orderId) {
+              try {
+                console.log('🔄 Processing payment success for order:', session.metadata.orderId)
+                const result = await paymentService.processPaymentSuccess(
+                  session.metadata.orderId,
+                  event.id,
+                  'stripe'
+                )
+                
+                console.log('✅ Stripe payment processed successfully:', {
+                  orderId: session.metadata.orderId,
+                  sessionId: session.id,
+                  alreadyProcessed: result.alreadyProcessed
+                })
+              } catch (error) {
+                console.error('❌ Failed to process Stripe payment:', error)
+                // 不返回错误，避免 Stripe 重试
+              }
+            }
+            break
+            
+          case 'payment_intent.succeeded':
+            console.log('💳 Processing payment_intent.succeeded event')
+            const paymentIntent = event.data.object as Stripe.PaymentIntent
+            
+            if (paymentIntent.metadata?.orderId) {
+              try {
+                console.log('🔄 Processing payment intent success for order:', paymentIntent.metadata.orderId)
+                const result = await paymentService.processPaymentSuccess(
+                  paymentIntent.metadata.orderId,
+                  event.id,
+                  'stripe'
+                )
+                
+                console.log('✅ Stripe payment intent processed successfully:', {
+                  orderId: paymentIntent.metadata.orderId,
+                  paymentIntentId: paymentIntent.id,
+                  alreadyProcessed: result.alreadyProcessed
+                })
+              } catch (error) {
+                console.error('❌ Failed to process Stripe payment intent:', error)
+              }
+            }
+            break
+            
+          default:
+            console.log('ℹ️ Unhandled event type:', event.type)
+            break
+        }
+
+        return reply.send({ received: true }) // 尽快 200
       } catch (err: any) {
-        console.error(`❌ Stripe webhook signature verification failed: ${err.message}`)
-        console.error('🔍 Verification details:', {
-          errorType: err.constructor.name,
-          errorCode: err.code,
-          errorStack: err.stack
-        })
-        return reply.code(400).send({ error: `Webhook Error: ${err.message}` })
+        console.error('webhook verify failed:', err.message)
+        return reply.code(400).send(`Webhook Error: ${err.message}`)
       }
-
-      // 处理支付成功事件
-      console.log('🎯 Processing event type:', event.type)
-      
-      if (event.type === 'checkout.session.completed') {
-        console.log('💳 Processing checkout.session.completed event')
-        const session = event.data.object as Stripe.Checkout.Session
-        
-        console.log('📋 Session details:', {
-          id: session.id,
-          payment_status: session.payment_status,
-          amount_total: session.amount_total,
-          metadata: session.metadata
-        })
-        
-        if (session.payment_status === 'paid' && session.metadata?.orderId) {
-          try {
-            console.log('🔄 Processing payment success for order:', session.metadata.orderId)
-            const result = await paymentService.processPaymentSuccess(
-              session.metadata.orderId,
-              event.id,
-              'stripe'
-            )
-            
-            console.log('✅ Stripe payment processed successfully:', {
-              orderId: session.metadata.orderId,
-              sessionId: session.id,
-              alreadyProcessed: result.alreadyProcessed
-            })
-          } catch (error) {
-            console.error('❌ Failed to process Stripe payment:', error)
-            // 不返回错误，避免 Stripe 重试
-          }
-        } else {
-          console.log('⚠️ Session not paid or missing orderId:', {
-            payment_status: session.payment_status,
-            hasOrderId: !!session.metadata?.orderId
-          })
-        }
-      } else if (event.type === 'payment_intent.succeeded') {
-        console.log('💳 Processing payment_intent.succeeded event')
-        const paymentIntent = event.data.object as Stripe.PaymentIntent
-        
-        console.log('📋 PaymentIntent details:', {
-          id: paymentIntent.id,
-          amount: paymentIntent.amount,
-          status: paymentIntent.status,
-          metadata: paymentIntent.metadata
-        })
-        
-        // 查找对应的订单
-        if (paymentIntent.metadata?.orderId) {
-          try {
-            console.log('🔄 Processing payment intent success for order:', paymentIntent.metadata.orderId)
-            const result = await paymentService.processPaymentSuccess(
-              paymentIntent.metadata.orderId,
-              event.id,
-              'stripe'
-            )
-            
-            console.log('✅ Stripe payment intent processed successfully:', {
-              orderId: paymentIntent.metadata.orderId,
-              paymentIntentId: paymentIntent.id,
-              alreadyProcessed: result.alreadyProcessed
-            })
-          } catch (error) {
-            console.error('❌ Failed to process Stripe payment intent:', error)
-          }
-        } else {
-          console.log('⚠️ PaymentIntent missing orderId in metadata')
-        }
-      } else if (event.type === 'charge.refunded' || event.type === 'refund.created') {
-        // 处理退款事件
-        console.log('🔄 Stripe refund event received:', event.type)
-        // TODO: 实现退款逻辑
-      } else {
-        console.log('ℹ️ Unhandled event type:', event.type)
-      }
-
-      console.log('✅ Webhook processing completed successfully')
-      return reply.send({ received: true })
-    } catch (error) {
-      console.error('Stripe webhook error:', error)
-      return reply.code(500).send({ error: 'Webhook processing failed' })
-    }
+    })
   })
 
   // PayPal Webhook 处理
