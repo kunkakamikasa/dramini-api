@@ -379,11 +379,24 @@ export class PaymentService {
   }
 
   // 验证 Stripe 支付（仅用于前端展示）
-  async verifyStripePayment(sessionId: string) {
+  async verifyStripePayment(sessionId: string, userId?: string) {
     try {
-      const session = await stripe.checkout.sessions.retrieve(sessionId)
+      // 1. 用 Stripe SDK 校验 session 归属和状态
+      const session = await stripe.checkout.sessions.retrieve(sessionId, { 
+        expand: ['payment_intent'] 
+      })
       
-      // 查找对应的订单
+      // 2. 安全校验
+      if (session.payment_status !== 'paid') {
+        throw new Error('Payment not completed')
+      }
+      
+      // 3. 校验用户归属（防止拿别人的 session 兑币）
+      if (userId && session.metadata?.userId !== userId) {
+        throw new Error('Session does not belong to current user')
+      }
+      
+      // 4. 查找对应的订单
       const order = await prisma.paymentOrder.findFirst({
         where: { providerOrderId: sessionId }
       })
@@ -392,23 +405,23 @@ export class PaymentService {
         throw new Error('Order not found')
       }
 
-      // 获取套餐信息
+      // 5. 获取套餐信息
       let tierInfo = null
       if (order.tierKey) {
         tierInfo = await this.getCmsPackageConfig(order.tierKey)
       }
 
-      // 获取用户当前余额
+      // 6. 获取用户当前余额
       const userCoins = await prisma.userCoins.findUnique({
         where: { userId: order.userId }
       })
 
       return {
-        success: session.payment_status === 'paid',
+        success: true,
         alreadyProcessed: order.status === 'completed',
         orderId: order.id,
         plan: tierInfo?.name || 'Unknown',
-        creditedCoins: order.coins, // 本次入账的金币
+        creditedCoins: order.coins, // 本次入账的金币（从数据库读取）
         balance: userCoins?.balance || 0, // 用户当前余额
         sessionId: sessionId,
         paymentIntentId: session.payment_intent as string

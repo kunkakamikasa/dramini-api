@@ -379,6 +379,8 @@ model PaymentOrder {
   
   // 关联的金币交易记录
   coinTransactions  CoinTransaction[]
+  // 关联的 webhook 事件记录
+  webhookEvents      WebhookEvent[]
 
   @@unique([provider, providerOrderId])
   @@unique([provider, providerEventId])
@@ -410,4 +412,18 @@ model UserCoins {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("user_coins")
+}
+
+// Webhook 事件记录表（幂等处理）
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique @map("event_id") // Stripe/PayPal 的事件ID
+  orderId     String   @map("order_id")
+  provider    String   // 'stripe' | 'paypal'
+  processedAt DateTime @default(now()) @map("processed_at")
+  
+  // 关联的支付订单
+  order       PaymentOrder @relation(fields: [orderId], references: [id])
+
+  @@map("webhook_events")
 }
