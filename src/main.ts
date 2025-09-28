@@ -211,6 +211,24 @@ fastify.post('/api/v1/user/purchase/checkout/paypal', async (request, reply) => 
   }
 })
 
+// PayPal 支付捕获端点
+fastify.post('/api/v1/user/purchase/capture/paypal', async (request, reply) => {
+  try {
+    const { orderId } = request.body as { orderId: string }
+    console.log('PayPal capture request:', orderId)
+    
+    if (!orderId) {
+      return reply.code(400).send({ error: 'Missing orderId' })
+    }
+    
+    const result = await paymentService.capturePayPalPayment(orderId)
+    return result
+  } catch (error) {
+    console.error('PayPal capture error:', error)
+    return reply.code(500).send({ error: 'PayPal capture failed' })
+  }
+})
+
 // 支付验证端点
 fastify.post('/api/v1/payment/verify/stripe', async (request, reply) => {
   try {
