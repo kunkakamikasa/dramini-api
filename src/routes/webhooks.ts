@@ -19,7 +19,7 @@ const paymentService = new PaymentService()
 
 export async function webhookRoutes(fastify: FastifyInstance) {
   // Stripe Webhook 处理 - 需要原始请求体进行签名验证
-  fastify.post('/api/v1/webhook/stripe', async (request, reply) => {
+  fastify.post('/api/v1/webhooks/stripe', async (request, reply) => {
     try {
       console.log('🚀 Stripe webhook endpoint hit!')
       // 获取原始请求体 - 手动读取原始数据
@@ -248,7 +248,7 @@ export async function webhookRoutes(fastify: FastifyInstance) {
             } else {
               console.error('No orderId in PayPal custom data:', customData)
             }
-          } catch (error) {
+        } catch (error) {
             console.error('Failed to process PayPal payment:', error)
             console.error('Error details:', {
               message: error instanceof Error ? error.message : 'Unknown error',
