@@ -271,20 +271,36 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
       while (currentDate <= endDate) {
         
         if (granularity === 'hour') {
-          // 遍历当天所有24小时，但只包含有数据的小时
+          // 收集当天所有小时数据并去重
+          const hourDataMap = new Map()
           for (let h = 0; h < 24; h++) {
             const hourKey = generateStatsKey(currentDate, h)
             const hourStats = statsStore.get(hourKey)
             if (hourStats && (hourStats.pv > 0 || hourStats.uv.size > 0 || hourStats.registrations > 0 || hourStats.viewers.size > 0)) {
-              stats.push({
-                date: hourStats.date,
-                hour: hourStats.hour,
-                pv: hourStats.pv,
-                uv: hourStats.uv.size,
-                registrations: hourStats.registrations,
-                viewers: hourStats.viewers.size
-              })
+              const hourKey = `${hourStats.date}-${hourStats.hour}`
+              if (!hourDataMap.has(hourKey)) {
+                hourDataMap.set(hourKey, {
+                  date: hourStats.date,
+                  hour: hourStats.hour,
+                  pv: hourStats.pv,
+                  uv: hourStats.uv.size,
+                  registrations: hourStats.registrations,
+                  viewers: hourStats.viewers.size
+                })
+              } else {
+                // 合并重复的小时数据
+                const existing = hourDataMap.get(hourKey)
+                existing.pv += hourStats.pv
+                existing.uv = Math.max(existing.uv, hourStats.uv.size)
+                existing.registrations += hourStats.registrations
+                existing.viewers = Math.max(existing.viewers, hourStats.viewers.size)
+              }
             }
+          }
+          
+          // 将去重后的数据添加到stats数组
+          for (const hourData of hourDataMap.values()) {
+            stats.push(hourData)
           }
         } else {
           const dateKey = generateStatsKey(currentDate)
