@@ -161,46 +161,60 @@ export class AnalyticsService {
       const hour = now.getHours()
 
       // 更新小时统计
-      await prisma.websiteStats.upsert({
+      const existingHourStats = await prisma.websiteStats.findFirst({
         where: {
-          date_hour: {
-            date: today,
-            hour: hour
-          }
-        },
-        update: {
-          [type]: { increment: 1 }
-        },
-        create: {
           date: today,
-          hour: hour,
-          pv: type === 'pv' ? 1 : 0,
-          uv: type === 'uv' ? 1 : 0,
-          registrations: type === 'registrations' ? 1 : 0,
-          viewers: type === 'viewers' ? 1 : 0
+          hour: hour
         }
       })
 
-      // 更新日统计
-      await prisma.websiteStats.upsert({
-        where: {
-          date_hour: {
-            date: today,
-            hour: null
+      if (existingHourStats) {
+        await prisma.websiteStats.update({
+          where: { id: existingHourStats.id },
+          data: {
+            [type]: { increment: 1 }
           }
-        },
-        update: {
-          [type]: { increment: 1 }
-        },
-        create: {
+        })
+      } else {
+        await prisma.websiteStats.create({
+          data: {
+            date: today,
+            hour: hour,
+            pv: type === 'pv' ? 1 : 0,
+            uv: type === 'uv' ? 1 : 0,
+            registrations: type === 'registrations' ? 1 : 0,
+            viewers: type === 'viewers' ? 1 : 0
+          }
+        })
+      }
+
+      // 更新日统计
+      const existingDayStats = await prisma.websiteStats.findFirst({
+        where: {
           date: today,
-          hour: null,
-          pv: type === 'pv' ? 1 : 0,
-          uv: type === 'uv' ? 1 : 0,
-          registrations: type === 'registrations' ? 1 : 0,
-          viewers: type === 'viewers' ? 1 : 0
+          hour: null
         }
       })
+
+      if (existingDayStats) {
+        await prisma.websiteStats.update({
+          where: { id: existingDayStats.id },
+          data: {
+            [type]: { increment: 1 }
+          }
+        })
+      } else {
+        await prisma.websiteStats.create({
+          data: {
+            date: today,
+            hour: null,
+            pv: type === 'pv' ? 1 : 0,
+            uv: type === 'uv' ? 1 : 0,
+            registrations: type === 'registrations' ? 1 : 0,
+            viewers: type === 'viewers' ? 1 : 0
+          }
+        })
+      }
     } catch (error) {
       console.error('Update stats error:', error)
     }
