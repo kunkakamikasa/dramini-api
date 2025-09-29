@@ -1,342 +1,488 @@
 import { PrismaClient } from '@prisma/client'
-import { FastifyRequest } from 'fastify'
+import { UAParser } from 'ua-parser-js'
 
 const prisma = new PrismaClient()
 
-export interface AnalyticsData {
-  sessionId: string
-  userId?: string
-  ipAddress: string
-  userAgent?: string
-  referrer?: string
-  page?: string
+interface AnalyticsEvent {
+  event_id: string
+  event_name: string
+  visitor_id: string
+  session_id: string
+  user_id?: string
+  schema_version: number
+  props: Record<string, any>
+  timestamp: string
+}
+
+interface PageViewEvent extends AnalyticsEvent {
+  page_view_id?: string
+  page: string
   title?: string
-  eventType?: string
-  eventData?: any
+  referrer?: string
+  duration_seconds?: number
+}
+
+interface QueueItem {
+  type: 'event' | 'pageview' | 'heartbeat'
+  data: AnalyticsEvent | PageViewEvent | { page_view_id: string; seconds: number }
+}
+
+// 机器人/爬虫过滤
+class BotDetector {
+  private static readonly botPatterns = [
+    /bot/i, /crawler/i, /spider/i, /crawling/i, /scraper/i,
+    /headless/i, /phantom/i, /selenium/i, /phantomjs/i, /chrome-lighthouse/i,
+    /webpage test/i, /site24x7/i, /uptime/i, /pingdom/i, /monitor/i,
+    /check/i, /test/i, /scan/i, /probe/i, /validator/i,
+    /facebookexternalhit/i, /twitterbot/i, "/linkedinbot/i",
+    /whatsapp/i, /telegrambot/i, /applebot/i, /bingbot/i,
+    /yandexbot/i, /baiduspider/i, /duckduckbot/i, /archive/i,
+    /ia_archiver/i, /wayback/i, /webster/, /curl/i, /wget/i,
+    /python/i, /go-http-client/i, /java/i, /okhttp/i, /http/i,
+    /\bcheck\b/i, /\btest\b/i, /\bscanner\b/i
+  ]
+
+  static isBot(userAgent: string): boolean {
+    if (!userAgent) return true
+    
+    return this.botPatterns.some(pattern => pattern.test(userAgent))
+  }
+
+  static isCrawler(userAgent: string): boolean {
+    const crawlerPatterns = [
+     /bot/i, /crawler/i, /spider/i, /headless/i,
+      /facebookexternalhit/i, /twitterbot/i, /googlebot/i,
+      /baiduspider/i, /yandexbot/i, /bingbot/i
+    ]
+    
+    return userAgent && crawlerPatterns.some(pattern => pattern.test(userAgent))
+  }
 }
 
 export class AnalyticsService {
-  // 生成会话ID
-  generateSessionId(): string {
-    return `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  }
-
-  // 获取客户端IP地址
-  getClientIP(request: FastifyRequest): string {
-    const forwarded = request.headers['x-forwarded-for'] as string
-    const realIP = request.headers['x-real-ip'] as string
-    const remoteAddress = request.ip
+  
+  // 解析客户端IP
+  extractClientIP(request: any): string {
+    const forwarded = request.headers['x-forwarded-for']
+    const realIP = request.headers['x-real-ip']
+    const cfConnectingIP = request.headers['cf-connecting-ip']
     
-    if (forwarded) {
-      return forwarded.split(',')[0].trim()
-    }
-    if (realIP) {
-      return realIP
-    }
-    return remoteAddress || 'unknown'
+    if (cfConnectingIP) return cfConnectingIP
+    if (realIP) return realIP
+    if (forwarded) return forwarded.split(',')[0].trim()
+    
+    return request.ip || '127.0.0.1'
   }
 
   // 解析User-Agent
-  parseUserAgent(userAgent: string) {
-    const ua = userAgent.toLowerCase()
+  private parseUserAgent(userAgent: string) {
+    const parser = new UAParser(userAgent)
+    const browser = parser.getBrowser()
+    const os = parser.getOS()
+    const device = parser.getDevice()
     
-    // 设备类型
-    let device = 'desktop'
-    if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
-      device = 'mobile'
-    } else if (ua.includes('tablet') || ua.includes('ipad')) {
-      device = 'tablet'
-    }
-
-    // 浏览器
-    let browser = 'unknown'
-    if (ua.includes('chrome')) browser = 'chrome'
-    else if (ua.includes('firefox')) browser = 'firefox'
-    else if (ua.includes('safari')) browser = 'safari'
-    else if (ua.includes('edge')) browser = 'edge'
-
-    // 操作系统
-    let os = 'unknown'
-    if (ua.includes('windows')) os = 'windows'
-    else if (ua.includes('mac')) os = 'macos'
-    else if (ua.includes('linux')) os = 'linux'
-    else if (ua.includes('android')) os = 'android'
-    else if (ua.includes('ios')) os = 'ios'
-
-    return { device, browser, os }
-  }
-
-  // 记录用户会话
-  async trackSession(data: AnalyticsData) {
-    try {
-      const { userAgent, ...otherData } = data
-      const { device, browser, os } = userAgent ? this.parseUserAgent(userAgent) : { device: 'unknown', browser: 'unknown', os: 'unknown' }
-
-      // 检查会话是否已存在
-      const existingSession = await prisma.userSession.findUnique({
-        where: { sessionId: data.sessionId }
-      })
-
-      if (existingSession) {
-        // 更新现有会话
-        await prisma.userSession.update({
-          where: { sessionId: data.sessionId },
-          data: {
-            lastVisit: new Date(),
-            visitCount: { increment: 1 },
-            userId: data.userId || existingSession.userId
-          }
-        })
-      } else {
-        // 创建新会话
-        await prisma.userSession.create({
-          data: {
-            sessionId: data.sessionId,
-            userId: data.userId,
-            ipAddress: data.ipAddress,
-            userAgent,
-            referrer: data.referrer,
-            device,
-            browser,
-            os,
-            firstVisit: new Date(),
-            lastVisit: new Date(),
-            visitCount: 1
-          }
-        })
-      }
-    } catch (error) {
-      console.error('Track session error:', error)
+    return {
+      browser: browser.name || 'Unknown',
+      os: os.name || 'Unknown',
+      device: device.type || 'desktop'
     }
   }
 
-  // 记录页面访问
-  async trackPageView(data: AnalyticsData) {
-    try {
-      await prisma.pageView.create({
-        data: {
-          sessionId: data.sessionId,
-          userId: data.userId,
-          page: data.page || '/',
-          title: data.title,
-          referrer: data.referrer
-        }
-      })
-
-      // 更新统计数据
-      await this.updateStats('pv')
-    } catch (error) {
-      console.error('Track page view error:', error)
+  // 批量处理事件
+  async processEventBatch(events: QueueItem[], ipAddress: string, userAgent?: string, requestHeaders?: any): Promise<{ processed: number; filtered: number }> {
+    let processed = 0
+    let filtered = 0
+    
+    // 1. 机器人过滤
+    if (BotDetector.isBot(userAgent || '')) {
+      console.log('Bot detected:', userAgent)
+      return { processed: 0, filtered: events.length }
     }
-  }
 
-  // 记录用户事件
-  async trackEvent(data: AnalyticsData) {
-    try {
-      await prisma.userEvent.create({
-        data: {
-          sessionId: data.sessionId,
-          userId: data.userId,
-          eventType: data.eventType || 'unknown',
-          eventData: data.eventData ? JSON.stringify(data.eventData) : null
-        }
-      })
-
-      // 根据事件类型更新统计数据
-      if (data.eventType === 'register') {
-        await this.updateStats('registrations')
-      } else if (data.eventType === 'video_play') {
-        await this.updateStats('viewers')
+    // 2. Origin校验（可选）
+    if (requestHeaders?.origin && requestHeaders?.host) {
+      const allowedOrigins = [
+        process.env.NEXT_PUBLIC_DOMAIN || 'https://shortdramini.com',
+        'http://localhost:3000',
+        'https://dramini-web.vercel.app'
+      ]
+      
+      const origin = requestHeaders.origin.toLowerCase()
+      const isAllowed = allowedOrigins.some(allowed => 
+        origin.includes(allowed.replace('https://', '').replace(/^https?\:\/\//, ''))
+      )
+      
+      if (!isAllowed) {
+        console.warn('Origin not allowed:', origin)
+        filtered++
+        // 不阻断，仅记录警告
       }
-    } catch (error) {
-      console.error('Track event error:', error)
     }
-  }
 
-  // 更新统计数据
-  async updateStats(type: 'pv' | 'uv' | 'registrations' | 'viewers') {
     try {
-      const now = new Date()
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const hour = now.getHours()
-
-      // 更新小时统计
-      const existingHourStats = await prisma.websiteStats.findFirst({
-        where: {
-          date: today,
-          hour: hour
-        }
-      })
-
-      if (existingHourStats) {
-        await prisma.websiteStats.update({
-          where: { id: existingHourStats.id },
-          data: {
-            [type]: { increment: 1 }
-          }
-        })
-      } else {
-        await prisma.websiteStats.create({
-          data: {
-            date: today,
-            hour: hour,
-            pv: type === 'pv' ? 1 : 0,
-            uv: type === 'uv' ? 1 : 0,
-            registrations: type === 'registrations' ? 1 : 0,
-            viewers: type === 'viewers' ? 1 : 0
-          }
-        })
-      }
-
-      // 更新日统计
-      const existingDayStats = await prisma.websiteStats.findFirst({
-        where: {
-          date: today,
-          hour: null
-        }
-      })
-
-      if (existingDayStats) {
-        await prisma.websiteStats.update({
-          where: { id: existingDayStats.id },
-          data: {
-            [type]: { increment: 1 }
-          }
-        })
-      } else {
-        await prisma.websiteStats.create({
-          data: {
-            date: today,
-            hour: null,
-            pv: type === 'pv' ? 1 : 0,
-            uv: type === 'uv' ? 1 : 0,
-            registrations: type === 'registrations' ? 1 : 0,
-            viewers: type === 'viewers' ? 1 : 0
-          }
-        })
-      }
-    } catch (error) {
-      console.error('Update stats error:', error)
-    }
-  }
-
-  // 计算UV（独立访客数）
-  async calculateUV(date: Date, hour?: number) {
-    try {
-      const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000)
-
-      let whereClause: any = {
-        firstVisit: {
-          gte: startOfDay,
-          lt: endOfDay
-        }
-      }
-
-      if (hour !== undefined) {
-        const startOfHour = new Date(startOfDay.getTime() + hour * 60 * 60 * 1000)
-        const endOfHour = new Date(startOfHour.getTime() + 60 * 60 * 1000)
+      await prisma.$transaction(async (tx) => {
+        const parsedUA = this.parseUserAgent(userAgent || '')
         
-        whereClause.firstVisit = {
-          gte: startOfHour,
-          lt: endOfHour
+        for (const item of events) {
+          try {
+            await this.processSingleEvent(item, ipAddress, parsedUA, tx)
+            processed++
+          } catch (error: any) {
+            if (error.code === 'P2002' || error.message?.includes('UNIQUE constraint')) {
+              // 幂等冲突，忽略
+              console.log('Event already processed:', item.data.event_id || item.data.page_view_id)
+              filtered++
+            } else {
+              console.error('Event processing error:', error)
+              throw error
+            }
+          }
         }
-      }
-
-      const uniqueVisitors = await prisma.userSession.count({
-        where: whereClause
       })
-
-      return uniqueVisitors
+      
+      console.log(`Analytics batch processed: ${processed} events, ${filtered} filtered`)
+    
     } catch (error) {
-      console.error('Calculate UV error:', error)
-      return 0
+      console.error('Batch processing failed:', error)
+      throw error
+    }
+
+    return { processed, filtered }
+  }
+
+  // 处理单个事件
+  private async processSingleEvent(
+    event: QueueItem, 
+    ipAddress: string, 
+    userAgentInfo: any, 
+    tx: any
+  ): Promise<void> {
+    
+    if (event.type === 'pageview') {
+      const pvData = event.data as PageViewEvent
+      
+      // 1. 记录会话
+      await this.trackSession(pvData.visitor_id, pvData.session_id, pvData.user_id, ipAddress, userAgentInfo, tx)
+      
+      // 2. 记录页面访问
+      await tx.pageView.create({
+        data: {
+          page_view_id: pvData.page_view_id!,
+          visitor_id: pvData.visitor_id,
+          session_id: pvData.session_id,
+          user_id: pvData.user_id,
+          page: pvData.page,
+          title: pvData.title,
+          referrer: pvData.referrer
+        }
+      })
+      
+      // 3. 更新统计数据
+      await this.updateStatsCounters('pv', tx)
+      
+    } else if (event.type === 'event') {
+      const eventData = event.data as AnalyticsEvent
+      
+      // 1. 记录会话
+      await this.trackSession(eventData.visitor_id, eventData.session_id, eventData.user_id, ipAddress, userAgentInfo, tx)
+      
+      // 2. 记录事件
+      await tx.userEvent.create({
+        data: {
+          event_id: eventData.event_id,
+          visitor_id: eventData.visitor_id,
+          session_id: eventData.session_id,
+          user_id: eventData.user_id,
+          event_name: eventData.event_name,
+          schema_version: eventData.schema_version,
+          props: eventData.props
+        }
+      })
+      
+      // 3. 更新统计数据（根据事件类型）
+      if (eventData.event_name === 'user_register') {
+        await this.updateStatsCounters('registrations', tx)
+      } else if (eventData.event_name === 'video_play') {
+        await this.updateStatsCounters('viewers', tx)
+      }
+      
+    } else if (event.type === 'heartbeat') {
+      const heartbeatData = event.data as { page_view_id: string; seconds: number }
+      
+      // 记录心跳增量
+      await tx.pageViewHeartbeat.create({
+        data: {
+          page_view_id: heartbeatData.page_view_id,
+          duration_delta: heartbeatData.seconds
+        }
+      })
+      
+      // 更新PageView的总时长
+      await tx.pageView.updateMany({
+        where: { page_view_id: heartbeatData.page_view_id },
+        data: {
+          duration_seconds: { increment: heartbeatData.seconds }
+        }
+      })
+    }
+  }
+
+  // 会话管理
+  private async trackSession(
+    visitorId: string, 
+    sessionId: string, 
+    userId: string | undefined, 
+    ipAddress: string, 
+    userAgentInfo: any, 
+    tx: any
+  ): Promise<void> {
+    
+    const now = new Date()
+    
+    // 查找现有会话
+    const existingSession = await tx.userSession.findFirst({
+      where: { visitorId, sessionId }
+    })
+    
+    if (existingSession) {
+      // 更新现有会话
+      await tx.userSession.update({
+        where: { id: existingSession.id },
+        data: {
+          userId,
+          ipAddress,
+          userAgent: userAgentInfo.browser,
+          device: userAgentInfo.device,
+          browser: userAgentInfo.browser,
+          os: userAgentInfo.os,
+          lastVisit: now,
+          visitCount: { increment: 1 }
+        }
+      })
+    } else {
+      // 创建新会话
+      await tx.userSession.create({
+        data: {
+          visitor_id: visitorId,
+          session_id: sessionId,
+          userId,
+          ipAddress,
+          userAgent: userAgentInfo.browser,
+          device: userAgentInfo.device,
+          browser: userAgentInfo.browser,
+          os: userAgentInfo.os,
+          firstVisit: now,
+          lastVisit: now,
+          visitCount: 1
+        }
+      })
+      
+      // 更新UV计数
+      await this.updateStatsCounters('uv', tx)
+    }
+  }
+
+  // 统计数据计数更新
+  private async updateStatsCounters(type: 'pv' | 'uv' | 'registrations' | 'viewers', tx: any): Promise<void> {
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const hour = now.getHours()
+
+    // 更新小时统计
+    await this.upsertHourlyStats(today, hour, type, tx)
+    
+    // 更新日统计
+    await this.upsertDailyStats(today, type, tx)
+  }
+
+  private async upsertHourlyStats(date: Date, hour: number, type: string, tx: any): Promise<void> {
+    const existing = await tx.websiteStatsHourly.findFirst({
+      where: { date, hour }
+    })
+
+    if (existing) {
+      await tx.websiteStatsHourly.update({
+        where: { id: existing.id },
+        data: { [type]: { increment: 1 } }
+      })
+    } else {
+      await tx.websiteStatsHourly.create({
+        data: {
+          date,
+          hour,
+          pv: type === 'pv' ? 1 : 0,
+          uv: type === 'uv' ? 1 : 0,
+          registrations: type === 'registrations' ? 1 : 0,
+          viewers: type === 'viewers' ? 1 : 0
+        }
+      })
+    }
+  }
+
+  private async upsertDailyStats(date: Date, type: string, tx: any): Promise<void> {
+    const existing = await tx.websiteStatsDaily.findFirst({
+      where: { date }
+    })
+
+    if (existing) {
+      await tx.websiteStatsDaily.update({
+        where: { id: existing.id },
+        data: { [type]: { increment: 1 } }
+      })
+    } else {
+      await tx.websiteStatsDaily.create({
+        data: {
+          date,
+          pv: type === 'pv' ? 1 : 0,
+          uv: type === 'uv' ? 1 : 0,
+          registrations: type === 'registrations' ? 1 : 0,
+          viewers: type === 'viewers' ? 1 : 0
+        }
+      })
     }
   }
 
   // 获取统计数据
-  async getStats(startDate: Date, endDate: Date, granularity: 'hour' | 'day' | 'month' | 'year' = 'day') {
-    try {
-      const stats = await prisma.websiteStats.findMany({
+  async getOverviewStats() {
+    const today = new Date()
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+    today.setHours(0, 0, 0, 0)
+    yesterday.setHours(0, 0, 0, 0)
+
+    const currentWeekStart = new Date(today)
+    currentWeekStart.setDate(today.getDate() - today.getDay())
+
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+
+    const [todayStats, yesterdayStats, weekStats, monthStats] = await Promise.all([
+      this.getStatsByDateRange(today, today),
+      this.getStatsByDateRange(yesterday, yesterday),
+      this.getStatsByDateRange(currentWeekStart, today),
+      this.getStatsByDateRange(currentMonthStart, today)
+    ])
+
+    return {
+      today: todayStats,
+      yesterday: yesterdayStats,
+      currentWeek: weekStats,
+      currentMonth: monthStats
+    }
+  }
+
+  private async getStatsByDateRange(startDate: Date, endDate: Date) {
+    const stats = await prisma.websiteStatsDaily.aggregate({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      _sum: {
+        pv: true,
+        uv: true,
+        registrations: true,
+        viewers: true
+      }
+    })
+
+    return {
+      pv: Number(stats._sum.pv || 0),
+      uv: Number(stats._sum.uv || 0),
+      registrations: Number(stats._sum.registrations || 0),
+      viewers: Number(stats._sum.viewers || 0)
+    }
+  }
+
+  async getTimeSeriesStats(startDate: Date, endDate: Date, granularity: 'hour' | 'day' | 'month' | 'year') {
+    if (granularity === 'hour') {
+      // 按小时查询
+      const stats = await prisma.websiteStatsHourly.findMany({
         where: {
           date: {
             gte: startDate,
             lte: endDate
-          },
-          hour: granularity === 'hour' ? { not: null } : null
+          }
         },
-        orderBy: [
-          { date: 'asc' },
-          { hour: 'asc' }
-        ]
+        orderBy: [{ date: 'asc' }, { hour: 'asc' }]
       })
 
-      // 重新计算UV（因为UV需要实时计算）
-      const statsWithUV = await Promise.all(
-        stats.map(async (stat) => {
-          const uv = await this.calculateUV(stat.date, stat.hour || undefined)
-          return {
-            ...stat,
-            uv
+      return stats.map(stat => ({
+        date: stat.date,
+        hour: stat.hour,
+        pv: Number(stat.pv),
+        uv: Number(stat.uv),
+        registrations: Number(stat.registrations),
+        viewers: Number(stat.viewers)
+      }))
+    } else {
+      // 按天/月/年查询
+      const stats = await prisma.websiteStatsDaily.findMany({
+        where: {
+          date: {
+            gte: startDate,
+            lte: endDate
           }
-        })
-      )
+        },
+        orderBy: { date: 'asc' }
+      })
 
-      return statsWithUV
-    } catch (error) {
-      console.error('Get stats error:', error)
-      return []
+      // 按粒度聚合
+      return this.aggregateByGranularity(stats, granularity)
     }
   }
 
-  // 获取概览数据
-  async getOverviewStats() {
-    try {
-      const today = new Date()
-      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
-      const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-      const lastMonth = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+  private aggregateByGranularity(stats: any[], granularity: string) {
+    const grouped: { [key: string]: any } = {}
 
-      // 今日数据
-      const todayStats = await this.getStats(today, today, 'day')
-      const todayData = todayStats[0] || { pv: 0, uv: 0, registrations: 0, viewers: 0 }
+    stats.forEach(stat => {
+      let key: string
+      let displayDate: Date = stat.date
 
-      // 昨日数据
-      const yesterdayStats = await this.getStats(yesterday, yesterday, 'day')
-      const yesterdayData = yesterdayStats[0] || { pv: 0, uv: 0, registrations: 0, viewers: 0 }
-
-      // 本周数据
-      const weekStats = await this.getStats(lastWeek, today, 'day')
-      const weekData = weekStats.reduce((acc, stat) => ({
-        pv: acc.pv + stat.pv,
-        uv: acc.uv + stat.uv,
-        registrations: acc.registrations + stat.registrations,
-        viewers: acc.viewers + stat.viewers
-      }), { pv: 0, uv: 0, registrations: 0, viewers: 0 })
-
-      // 本月数据
-      const monthStats = await this.getStats(lastMonth, today, 'day')
-      const monthData = monthStats.reduce((acc, stat) => ({
-        pv: acc.pv + stat.pv,
-        uv: acc.uv + stat.uv,
-        registrations: acc.registrations + stat.registrations,
-        viewers: acc.viewers + stat.viewers
-      }), { pv: 0, uv: 0, registrations: 0, viewers: 0 })
-
-      return {
-        today: todayData,
-        yesterday: yesterdayData,
-        week: weekData,
-        month: monthData
+      if (granularity === 'day') {
+        key = stat.date.toISOString().split('T')[0]
+      } else if (granularity === 'month') {
+        key = `${stat.date.getFullYear()}-${stat.date.getMonth() + 1}`
+        displayDate = new Date(stat.date.getFullYear(), stat.date.getMonth(), 1)
+      } else { // year
+        key = `${stat.date.getFullYear()}`
+        displayDate = new Date(stat.date.getFullYear(), 0, 1)
       }
-    } catch (error) {
-      console.error('Get overview stats error:', error)
-      return {
-        today: { pv: 0, uv: 0, registrations: 0, viewers: 0 },
-        yesterday: { pv: 0, uv: 0, registrations: 0, viewers: 0 },
-        week: { pv: 0, uv: 0, registrations: 0, viewers: 0 },
-        month: { pv: 0, uv: 0, registrations: 0, viewers: 0 }
+
+      if (!grouped[key]) {
+        grouped[key] = {
+          date: displayDate,
+          hour: undefined,
+          pv: 0,
+          uv: 0,
+          registrations: 0,
+          viewers: 0
+        }
       }
-    }
+
+      grouped[key].pv += Number(stat.pv)
+      grouped[key].uv += Number(stat.uv)
+      grouped[key].registrations += Number(stat.registrations)
+      grouped[key].viewers += Number(stat.viewers)
+    })
+
+    return Object.values(grouped).sort((a, b) => a.date.getTime() - b.date.getTime())
+  }
+
+  // 事件ID幂等检查（可选，用于验证）
+  async checkEventIdExists(eventId: string): Promise<boolean> {
+    const exists = await prisma.userEvent.findUnique({
+      where: { event_id: eventId },
+      select: { id: true }
+    })
+    return !!exists
+  }
+
+  // 页面访问ID幂等检查
+  async checkPageViewIdExists(pageViewId: string): Promise<boolean> {
+    const exists = await prisma.pageView.findUnique({
+      where: { page_view_id: pageViewId },
+      select: { id: true }
+    })
+    return !!exists
   }
 }
