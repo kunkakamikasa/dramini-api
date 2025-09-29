@@ -276,7 +276,7 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
           for (let h = 0; h < 24; h++) {
             const hourKey = generateStatsKey(currentDate, h)
             const hourStats = statsStore.get(hourKey)
-            if (hourStats && (hourStats.pv > 0 || hourStats.uv.size > 0 || hourStats.registrations > 0 || hourStats.viewers.size > 0)) {
+            if (hourStats) {
               const hourKey = `${hourStats.date}-${hourStats.hour}`
               if (!hourDataMap.has(hourKey)) {
                 hourDataMap.set(hourKey, {
