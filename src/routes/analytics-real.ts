@@ -155,7 +155,7 @@ function getOverviewStats() {
 export async function analyticsRealRoutes(fastify: FastifyInstance) {
   
   // Analytics health check
-  fastify.get('/analytics/health', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/api/v1/analytics/health', async (request: FastifyRequest, reply: FastifyReply) => {
     return reply.send({
       success: true,
       message: 'Analytics service is running (real data)',
@@ -167,7 +167,7 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
   })
 
   // Analytics track endpoint
-  fastify.post('/analytics/track', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/api/v1/analytics/track', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { events } = request.body as { events: AnalyticsEvent[] }
       
@@ -218,7 +218,7 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
   })
 
   // Analytics overview
-  fastify.get('/analytics/overview', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/api/v1/analytics/overview', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const stats = getOverviewStats()
       
@@ -241,7 +241,7 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
   })
 
   // Analytics stats
-  fastify.get('/analytics/stats', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/api/v1/analytics/stats', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { granularity = 'day', days = '7' } = request.query as { granularity?: string; days?: string }
       
