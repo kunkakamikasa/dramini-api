@@ -8,7 +8,6 @@ import { CloudflareService } from './services/cloudflare.js'
 import { PaymentService } from './services/payment.js'
 import { webhookRoutes } from './routes/webhooks.js'
 import { userRoutes } from './routes/users.js'
-import { analyticsRoutes } from './routes/analytics.js'
 import { analyticsRealRoutes } from './routes/analytics-real.js'
 
 // Load environment variables
@@ -181,7 +180,6 @@ fastify.register(webhookRoutes)
 fastify.register(userRoutes)
 
 // 注册统计路由
-fastify.register(analyticsRoutes)
 fastify.register(analyticsRealRoutes)
 
 // Stripe 支付端点
