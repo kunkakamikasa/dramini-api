@@ -277,9 +277,9 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
             const hourKey = generateStatsKey(currentDate, h)
             const hourStats = statsStore.get(hourKey)
             if (hourStats) {
-              const hourKey = `${hourStats.date}-${hourStats.hour}`
-              if (!hourDataMap.has(hourKey)) {
-                hourDataMap.set(hourKey, {
+              const uniqueHourKey = `${hourStats.date}-${hourStats.hour}`
+              if (!hourDataMap.has(uniqueHourKey)) {
+                hourDataMap.set(uniqueHourKey, {
                   date: hourStats.date,
                   hour: hourStats.hour,
                   pv: hourStats.pv,
@@ -289,7 +289,7 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
                 })
               } else {
                 // 合并重复的小时数据
-                const existing = hourDataMap.get(hourKey)
+                const existing = hourDataMap.get(uniqueHourKey)
                 existing.pv += hourStats.pv
                 existing.uv = Math.max(existing.uv, hourStats.uv.size)
                 existing.registrations += hourStats.registrations
