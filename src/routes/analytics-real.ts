@@ -269,14 +269,18 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
       if (granularity === 'hour') {
         // 直接遍历statsStore，收集所有小时数据并去重
         const hourDataMap = new Map()
-        console.log('StatsStore entries:', Array.from(statsStore.entries()))
+        
+        // 调试：输出所有statsStore内容
+        console.log('=== DEBUG: StatsStore contents ===')
+        for (const [key, hourStats] of statsStore.entries()) {
+          console.log(`Key: "${key}", HourStats:`, hourStats)
+        }
+        console.log('=== END DEBUG ===')
         
         for (const [key, hourStats] of statsStore.entries()) {
-          console.log('Processing key:', key, 'hourStats:', hourStats)
           // 只处理小时级别的数据（key包含小时信息）
           if (key.includes('-') && hourStats.hour !== undefined) {
             const uniqueHourKey = `${hourStats.date}-${hourStats.hour}`
-            console.log('Unique hour key:', uniqueHourKey)
             if (!hourDataMap.has(uniqueHourKey)) {
               hourDataMap.set(uniqueHourKey, {
                 date: hourStats.date,
@@ -297,8 +301,8 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
           }
         }
         
-        console.log('HourDataMap size:', hourDataMap.size)
-        console.log('HourDataMap entries:', Array.from(hourDataMap.entries()))
+        console.log('=== DEBUG: HourDataMap size ===', hourDataMap.size)
+        console.log('=== DEBUG: HourDataMap entries ===', Array.from(hourDataMap.entries()))
         
         // 将去重后的数据添加到stats数组
         for (const hourData of hourDataMap.values()) {
