@@ -271,7 +271,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       
       // 获取我们自己的统计数据
       const ourStats = await analyticsService.getTimeSeriesStats(start, end, 'day')
-      const ourTotals = ourStats.reduce((acc, day) => ({
+      const ourTotals = ourStats.reduce((acc: any, day: any) => ({
         pv: acc.pv + day.pv,
         uv: acc.uv + day.uv
       }), { pv: 0, uv: 0 })

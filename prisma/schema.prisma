@@ -481,14 +481,106 @@ model PageView {
   @@map("page_views")
 }
 
-// 用户行为事件表
-model UserEvent {
-  id          String   @id @default(cuid())
-  sessionId   String   @map("session_id")
-  userId      String?  @map("user_id")
-  eventType   String   @map("event_type") // 'page_view', 'video_play', 'register', 'login', 'purchase'
-  eventData   String?  @map("event_data") // JSON数据
-  createdAt   DateTime @default(now()) @map("created_at")
+// ==================== 专业级埋点系统 ====================
 
+// 网站统计表 - 按小时
+model WebsiteStatsHourly {
+  id            String   @id @default(cuid())
+  date          DateTime @map("date") // 统计日期 (站点时区)
+  hour          Int      @map("hour") // 0-23
+  pv            BigInt   @default(0) // 页面浏览量
+  uv            BigInt   @default(0) // 独立访客数
+  registrations BigInt   @default(0) // 注册用户数
+  viewers       BigInt   @default(0) // 观看用户数
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([date, hour])
+  @@map("website_stats_hourly")
+}
+
+// 网站统计表 - 按天
+model WebsiteStatsDaily {
+  id            String   @id @default(cuid())
+  date          DateTime @unique @map("date") // 统计日期
+  pv            BigInt   @default(0) // 页面浏览量
+  uv            BigInt   @default(0) // 独立访客数
+  registrations BigInt   @default(0) // 注册用户数
+  viewers       BigInt   @default(0) // 观看用户数
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("website_stats_daily")
+}
+
+// 用户会话表
+model UserSession {
+  id          String   @id @default(cuid())
+  visitorId   String   @map("visitor_id") // UUID访客ID
+  sessionId   String   @map("session_id") // UUID会话ID
+  userId      String?  @map("user_id") // 用户ID（已登录时）
+  ipAddress   String?  @map("ip_address") // INET类型
+  userAgent   String?  @map("user_agent")
+  device      String?  // 设备类型
+  browser     String?  // 浏览器
+  os          String?  // 操作系统
+  firstVisit  DateTime @default(now()) @map("first_visit")
+  lastVisit   DateTime @default(now()) @map("last_visit")
+  visitCount  Int      @default(1) @map("visit_count")
+
+  @@unique([visitorId, sessionId])
+  @@index([visitorId])
+  @@index([sessionId])
+  @@map("user_sessions")
+}
+
+// 用户事件表（幂等）
+model UserEvent {
+  id            String   @id @default(cuid())
+  eventId       String   @unique @map("event_id") // UUID
+  visitorId     String   @map("visitor_id")
+  sessionId     String   @map("session_id")
+  userId        String?  @map("user_id")
+  eventName     String   @map("event_name")
+  schemaVersion Int      @default(1) @map("schema_version")
+  props         Json     @default("{}") // JSONB类型
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([visitorId])
+  @@index([sessionId])
+  @@index([eventName])
+  @@index([createdAt])
   @@map("user_events")
+}
+
+// 页面访问表（幂等）
+model PageView {
+  id              String   @id @default(cuid())
+  pageViewId      String   @unique @map("page_view_id") // UUID
+  visitorId       String   @map("visitor_id")
+  sessionId       String   @map("session_id")
+  userId          String?  @map("user_id")
+  page            String   // 页面路径
+  title           String?  // 页面标题
+  referrer        String?  // 来源页面
+  durationSeconds Int      @default(0) @map("duration_seconds") // 总时长
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([visitorId])
+  @@index([sessionId])
+  @@index([page])
+  @@index([createdAt])
+  @@map("page_views")
+}
+
+// 页面访问时长心跳表（增量更新）
+model PageViewHeartbeat {
+  id            String   @id @default(cuid())
+  pageViewId    String   @map("page_view_id") // 关联PageView
+  durationDelta Int      @map("duration_delta") // 时长增量（秒）
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([pageViewId])
+  @@index([createdAt])
+  @@map("page_view_heartbeats")
 }

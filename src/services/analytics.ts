@@ -45,7 +45,12 @@ class BotDetector {
   static isBot(userAgent: string): boolean {
     if (!userAgent) return true
     
-    return this.botPatterns.some(pattern => pattern.test(userAgent))
+    return this.botPatterns.some(pattern => {
+      if (typeof pattern === 'string') {
+        return userAgent.includes(pattern)
+      }
+      return pattern.test(userAgent)
+    })
   }
 
   static isCrawler(userAgent: string): boolean {
@@ -55,7 +60,7 @@ class BotDetector {
       /baiduspider/i, /yandexbot/i, /bingbot/i
     ]
     
-    return userAgent && crawlerPatterns.some(pattern => pattern.test(userAgent))
+    return !!(userAgent && crawlerPatterns.some(pattern => pattern.test(userAgent)))
   }
 }
 
@@ -130,7 +135,9 @@ export class AnalyticsService {
           } catch (error: any) {
             if (error.code === 'P2002' || error.message?.includes('UNIQUE constraint')) {
               // 幂等冲突，忽略
-              console.log('Event already processed:', item.data.event_id || item.data.page_view_id)
+              const eventId = 'event_id' in item.data ? (item.data as AnalyticsEvent).event_id : 
+                             'page_view_id' in item.data ? (item.data as PageViewEvent).page_view_id : 'unknown'
+              console.log('Event already processed:', eventId)
               filtered++
             } else {
               console.error('Event processing error:', error)
@@ -406,7 +413,7 @@ export class AnalyticsService {
         orderBy: [{ date: 'asc' }, { hour: 'asc' }]
       })
 
-      return stats.map(stat => ({
+      return stats.map((stat: any) => ({
         date: stat.date,
         hour: stat.hour,
         pv: Number(stat.pv),
@@ -427,7 +434,7 @@ export class AnalyticsService {
       })
 
       // 按粒度聚合
-      return this.aggregateByGranularity(stats, granularity)
+      return this.aggregateByGranularity(stats as any, granularity)
     }
   }
 
@@ -471,7 +478,7 @@ export class AnalyticsService {
   // 事件ID幂等检查（可选，用于验证）
   async checkEventIdExists(eventId: string): Promise<boolean> {
     const exists = await prisma.userEvent.findUnique({
-      where: { event_id: eventId },
+      where: { eventId: eventId },
       select: { id: true }
     })
     return !!exists
@@ -480,7 +487,7 @@ export class AnalyticsService {
   // 页面访问ID幂等检查
   async checkPageViewIdExists(pageViewId: string): Promise<boolean> {
     const exists = await prisma.pageView.findUnique({
-      where: { page_view_id: pageViewId },
+      where: { pageViewId: pageViewId },
       select: { id: true }
     })
     return !!exists
