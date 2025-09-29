@@ -271,10 +271,11 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
       while (currentDate <= endDate) {
         
         if (granularity === 'hour') {
+          // 遍历当天所有24小时，但只包含有数据的小时
           for (let h = 0; h < 24; h++) {
             const hourKey = generateStatsKey(currentDate, h)
             const hourStats = statsStore.get(hourKey)
-            if (hourStats) {
+            if (hourStats && (hourStats.pv > 0 || hourStats.uv.size > 0 || hourStats.registrations > 0 || hourStats.viewers.size > 0)) {
               stats.push({
                 date: hourStats.date,
                 hour: hourStats.hour,
