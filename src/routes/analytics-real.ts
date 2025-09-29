@@ -266,42 +266,41 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
       
       const stats = []
       
-      // 支持startDate到endDate的精确时间范围
-      const currentDate = new Date(startDate)
-      while (currentDate <= endDate) {
-        
-        if (granularity === 'hour') {
-          // 直接遍历statsStore，收集所有小时数据并去重
-          const hourDataMap = new Map()
-          for (const [key, hourStats] of statsStore.entries()) {
-            // 只处理小时级别的数据（key包含小时信息）
-            if (key.includes('-') && hourStats.hour !== undefined) {
-              const uniqueHourKey = `${hourStats.date}-${hourStats.hour}`
-              if (!hourDataMap.has(uniqueHourKey)) {
-                hourDataMap.set(uniqueHourKey, {
-                  date: hourStats.date,
-                  hour: hourStats.hour,
-                  pv: hourStats.pv,
-                  uv: hourStats.uv.size,
-                  registrations: hourStats.registrations,
-                  viewers: hourStats.viewers.size
-                })
-              } else {
-                // 合并重复的小时数据
-                const existing = hourDataMap.get(uniqueHourKey)
-                existing.pv += hourStats.pv
-                existing.uv = Math.max(existing.uv, hourStats.uv.size)
-                existing.registrations += hourStats.registrations
-                existing.viewers = Math.max(existing.viewers, hourStats.viewers.size)
-              }
+      if (granularity === 'hour') {
+        // 直接遍历statsStore，收集所有小时数据并去重
+        const hourDataMap = new Map()
+        for (const [key, hourStats] of statsStore.entries()) {
+          // 只处理小时级别的数据（key包含小时信息）
+          if (key.includes('-') && hourStats.hour !== undefined) {
+            const uniqueHourKey = `${hourStats.date}-${hourStats.hour}`
+            if (!hourDataMap.has(uniqueHourKey)) {
+              hourDataMap.set(uniqueHourKey, {
+                date: hourStats.date,
+                hour: hourStats.hour,
+                pv: hourStats.pv,
+                uv: hourStats.uv.size,
+                registrations: hourStats.registrations,
+                viewers: hourStats.viewers.size
+              })
+            } else {
+              // 合并重复的小时数据
+              const existing = hourDataMap.get(uniqueHourKey)
+              existing.pv += hourStats.pv
+              existing.uv = Math.max(existing.uv, hourStats.uv.size)
+              existing.registrations += hourStats.registrations
+              existing.viewers = Math.max(existing.viewers, hourStats.viewers.size)
             }
           }
-          
-          // 将去重后的数据添加到stats数组
-          for (const hourData of hourDataMap.values()) {
-            stats.push(hourData)
-          }
-        } else {
+        }
+        
+        // 将去重后的数据添加到stats数组
+        for (const hourData of hourDataMap.values()) {
+          stats.push(hourData)
+        }
+      } else {
+        // 支持startDate到endDate的精确时间范围
+        const currentDate = new Date(startDate)
+        while (currentDate <= endDate) {
           const dateKey = generateStatsKey(currentDate)
           const dayStats = statsStore.get(dateKey)
           if (dayStats) {
@@ -313,12 +312,8 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
               viewers: dayStats.viewers.size
             })
           }
-        }
-        
-        // 移动到下一个时间单位
-        if (granularity === 'hour') {
-          currentDate.setHours(currentDate.getHours() + 1)
-        } else {
+          
+          // 移动到下一个时间单位
           currentDate.setDate(currentDate.getDate() + 1)
         }
       }
