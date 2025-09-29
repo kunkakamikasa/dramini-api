@@ -271,12 +271,11 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
       while (currentDate <= endDate) {
         
         if (granularity === 'hour') {
-          // 收集当天所有小时数据并去重
+          // 直接遍历statsStore，收集所有小时数据并去重
           const hourDataMap = new Map()
-          for (let h = 0; h < 24; h++) {
-            const hourKey = generateStatsKey(currentDate, h)
-            const hourStats = statsStore.get(hourKey)
-            if (hourStats) {
+          for (const [key, hourStats] of statsStore.entries()) {
+            // 只处理小时级别的数据（key包含小时信息）
+            if (key.includes('-') && hourStats.hour !== undefined) {
               const uniqueHourKey = `${hourStats.date}-${hourStats.hour}`
               if (!hourDataMap.has(uniqueHourKey)) {
                 hourDataMap.set(uniqueHourKey, {
