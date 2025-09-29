@@ -65,7 +65,7 @@ fastify.get('/api/v1/public/titles', async (request, reply) => {
     const titles = await contentService.getTitles(category, q);
     
     // 修正字段映射
-    const mappedTitles = titles.map(title => ({
+    const mappedTitles = titles.map((title: any) => ({
       ...title,
       mainTitle: title.name, // name → mainTitle
       subTitle: title.synopsis, // synopsis → subTitle

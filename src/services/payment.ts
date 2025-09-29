@@ -320,7 +320,7 @@ export class PaymentService {
       }
 
       // 使用事务确保原子性
-      const result = await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx: any) => {
         // 更新订单状态
         const updatedOrder = await tx.paymentOrder.update({
           where: { id: orderId },

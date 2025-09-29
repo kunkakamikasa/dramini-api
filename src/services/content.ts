@@ -18,7 +18,7 @@ export class ContentService {
         });
 
         return {
-            titles: titles.map(title => ({
+            titles: titles.map((title: any) => ({
                 id: title.id,
                 slug: title.slug,
                 name: title.name,
@@ -54,9 +54,9 @@ export class ContentService {
         });
 
         // 处理免费集数逻辑
-        return titles.map(title => ({
+        return titles.map((title: any) => ({
             ...title,
-            episodes: title.episodes.map(episode => ({
+            episodes: title.episodes.map((episode: any) => ({
                 ...episode,
                 isFree: episode.epNumber <= (title.freeUntilEpisode || 0),
                 episodeNum: episode.epNumber,
@@ -82,7 +82,7 @@ export class ContentService {
         // 处理免费集数逻辑
         return {
             ...title,
-            episodes: title.episodes.map(episode => ({
+            episodes: title.episodes.map((episode: any) => ({
                 ...episode,
                 isFree: episode.epNumber <= (title.freeUntilEpisode || 0),
                 episodeNum: episode.epNumber,
@@ -114,7 +114,7 @@ export class ContentService {
         return {
             section: 'new-release',
             title: 'New Release',
-            titles: titles.map(item => ({
+            titles: titles.map((item: any) => ({
                 id: item.id,
                 slug: item.slug,
                 name: item.name,
@@ -148,7 +148,7 @@ export class ContentService {
         return {
             section: 'trending-now',
             title: 'Trending Now',
-            titles: titles.map(item => ({
+            titles: titles.map((item: any) => ({
                 id: item.id,
                 slug: item.slug,
                 name: item.name,
@@ -187,10 +187,10 @@ export class ContentService {
         return {
             section: 'popular-categories',
             title: 'Popular Categories',
-            categories: categories.map(category => ({
+            categories: categories.map((category: any) => ({
                 id: category.id,
                 name: category.name,
-                titles: category.titles.map(title => ({
+                titles: category.titles.map((title: any) => ({
                     id: title.id,
                     slug: title.slug,
                     name: title.name,
@@ -216,7 +216,7 @@ export class ContentService {
             });
 
             // 获取所有contentId对应的影片信息
-            const contentIds = banners.map(banner => banner.contentId);
+            const contentIds = banners.map((banner: any) => banner.contentId);
             const movies = await prisma.title.findMany({
                 where: { id: { in: contentIds } },
                 select: {
@@ -230,17 +230,17 @@ export class ContentService {
             });
 
             // 创建影片ID到影片信息的映射
-            const movieMap = new Map(movies.map(movie => [movie.id, movie]));
+            const movieMap = new Map(movies.map((movie: any) => [movie.id, movie]));
 
             // 映射数据到前端期望的格式
-            const mappedBanners = banners.map(banner => {
+            const mappedBanners = banners.map((banner: any) => {
                 const movie = movieMap.get(banner.contentId);
                 return {
                     id: banner.id,
                     movieId: banner.contentId, // 添加movieId字段
-                    title: movie?.name || banner.title || 'Untitled',
-                    subtitle: movie?.synopsis || banner.subtitle || '',
-                    imageUrl: movie?.bannerUrl || movie?.coverImageId || banner.imageUrl || '',
+                    title: (movie as any)?.name || banner.title || 'Untitled',
+                    subtitle: (movie as any)?.synopsis || banner.subtitle || '',
+                    imageUrl: (movie as any)?.bannerUrl || (movie as any)?.coverImageId || banner.imageUrl || '',
                     actionUrl: banner.jumpUrl || '',
                     order: banner.orderIndex
                 };

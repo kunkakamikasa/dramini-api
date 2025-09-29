@@ -125,7 +125,7 @@ export class AnalyticsService {
     }
 
     try {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         const parsedUA = this.parseUserAgent(userAgent || '')
         
         for (const item of events) {
@@ -135,8 +135,8 @@ export class AnalyticsService {
           } catch (error: any) {
             if (error.code === 'P2002' || error.message?.includes('UNIQUE constraint')) {
               // 幂等冲突，忽略
-              const eventId = 'event_id' in item.data ? (item.data as AnalyticsEvent).event_id : 
-                             'page_view_id' in item.data ? (item.data as PageViewEvent).page_view_id : 'unknown'
+              const eventId = 'event_id' in item.data ? (item.data as any).event_id : 
+                             'page_view_id' in item.data ? (item.data as any).page_view_id : 'unknown'
               console.log('Event already processed:', eventId)
               filtered++
             } else {

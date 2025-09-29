@@ -1,0 +1,444 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  avatar        String?
+  provider      String         @default("email")
+  status        String         @default("ACTIVE")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  @@map("users")
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("categories")
+}
+
+model Tag {
+  id        String     @id @default(cuid())
+  slug      String     @unique
+  name      String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  @@map("tags")
+}
+
+model Title {
+  id             String           @id @default(cuid())
+  slug           String           @unique
+  name           String
+  synopsis       String?
+  coverImageId   String?
+  bannerUrl      String?          @map("bannerurl")
+  status         String           @default("DRAFT")
+  language       String           @default("en")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  releaseAt      DateTime?
+  rating         Float?
+  featuredWeight Int              @default(0)
+  categoryId     String?
+  freeUntilEpisode Int?           @map("freeUntilEpisode")
+  bundlePriceCoins Int?           @map("bundle_currentCoins")
+  
+  @@map("titles")
+}
+
+model Episode {
+  id            String       @id @default(cuid())
+  titleId       String
+  epNumber      Int
+  name          String
+  durationSec   Int?
+  videoId       String?
+  isFreePreview Boolean      @default(false)
+  lockType      String       @default("PAID_PER_EPISODE")
+  priceCents    Int?
+  status        String       @default("DRAFT")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  @@unique([titleId, epNumber])
+  @@map("episodes")
+}
+
+model PricingPlan {
+  id            String         @id @default(cuid())
+  type          String
+  priceCents    Int
+  currency      String         @default("USD")
+  benefitsJson  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  @@map("pricing_plans")
+}
+
+model Purchase {
+  id          String       @id @default(cuid())
+  userId      String
+  titleId     String
+  episodeId   String?
+  planId      String?
+  amountCents Int
+  currency    String       @default("USD")
+
+  @@map("purchases")
+}
+
+model EpisodeViewTracking {
+  userId    String   @id @map("user_id")
+  episodeId String   @map("episode_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+  
+  @@unique([userId, episodeId])
+  @@map("episode_view_tracking")
+}
+
+model BannerItem {
+  id        String   @id @default(cuid())
+  title     String?
+  imageUrl  String   @map("image_url")
+  targetUrl String?  @map("target_url")
+  
+  @@map("banner_items")
+}
+
+model CollectionItem {
+  o           String     @id @default(cuid())
+  collectionId String
+  titleId      String
+  order        Int        @default(0)
+  
+  @@unique([collectionId, titleId])
+  @@map("collection_items")
+}
+
+model TitleTag {
+  id      String @id @default(cuid())
+  titleId String
+  tagId   String
+  
+  @@unique([titleId, tagId])
+  @@map("title_tags")
+}
+
+model Subscription {
+  id               String      @id @default(cuid())
+  userId           String
+  planId           String
+  status           String      @default("ACTIVE")
+  currentPeriodEnd DateTime
+  extRef           String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  
+  @@map("subscriptions")
+}
+
+model Promotion {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  type       String
+  value      Int
+  startsAt   DateTime
+  endsAt     DateTime
+  usageLimit Int?
+  usedCount  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@map("promotions")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String
+  action      String
+  entity      String
+  entityId    String
+  beforeJson  String?
+  afterJson   String?
+  ip          String?
+  createdAt   DateTime @default(now())
+  
+  @@map("audit_logs")
+}
+
+model FlagReport {
+  id        String   @id @default(cuid())
+  userId    String
+  titleId   String?
+  episodeId String?
+  reason    String
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("flag_reports")
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  valueJson String
+  
+  @@map("settings")
+}
+
+model Locale {
+  id           String        @id @default(cuid())
+  code         String        @unique
+  name         String
+  createdAt    DateTime      @default(now())
+  
+  @@map("locales")
+}
+
+model Translation {
+  id        String   @id @default(cuid())
+  entity    String
+  entityId  String
+  field     String
+  localeId  String
+  value     String
+  status    String   @default("DRAFT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  titleId   String?
+  
+  @@unique([entity, entityId, field, localeId])
+  @@map("translations")
+}
+
+model Collection {
+  id             String           @id @default(cuid())
+  name           String
+  slug           String           @unique
+  type           String
+  ruleJson       String?
+  itemsOrderJson String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  
+  @@map("collections")
+}
+
+model admin_permissions {
+  id             String    @id @map("permission_id")
+  admin_id       String
+  permission_key String
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+  
+  @@map("admin_permissions")
+}
+
+model admins {
+  admin_id       String              @id @map("admin_id")
+  email             String              @unique
+  name              String?
+  avatar            String?
+  password          String?
+  role              String              @default("ADMIN")
+  status            String              @default("ACTIVE")
+  last_login        DateTime?           @db.Timestamp(6)
+  created_at        DateTime?           @default(now()) @db.Timestamp(6)
+  updated_at        DateTime?           @default(now()) @db.Timestamp(6)
+  
+  @@map("admins")
+}
+
+model SectionContent {
+  id          String   @id @default(uuid())
+  sectionType String   @map("section_type")
+  contentId   String   @map("content_id")
+  contentType String   @map("content_type") @default("movie")
+  title       String?
+  subtitle    String?
+  imageUrl    String?  @map("image_url")
+  jumpUrl     String?  @map("jump_url")
+  orderIndex  Int      @map("order_index") @default(0)
+  isActive    Boolean  @map("is_active") @default(true)
+  createdAt   DateTime @map("created_at") @default(now())
+  updatedAt   DateTime @map("updated_at") @updatedAt
+
+  @@map("section_content")
+}
+
+// 支付订单表
+model PaymentOrder {
+  id                String   @id @default(cuid())
+  userId            String
+  tierKey           String   @map("tier_key")
+  provider          String   // 'stripe' | 'paypal'
+  providerOrderId   String?  @map("provider_order_id")
+  providerEventId   String?  @map("provider_event_id")
+  amountCents       Int      @map("amount_cents")
+  coins             Int
+  status            String   @default("pending") // 'pending' | 'completed' | 'failed' | 'refunded'
+  metadata          String?  // JSON string for additional data
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  completedAt       DateTime? @map("completed_at")
+  
+  @@unique([provider, providerOrderId])
+  @@unique([provider, providerEventId])
+  @@map("payment_orders")
+}
+
+// 金币交易记录表
+model CoinTransaction {
+  id              String        @id @default(cuid())
+  userId          String        @map("user_id")
+  orderId         String        @map("order_id")
+  coins           Int
+  transactionType String        @map("transaction_type") // 'purchase' | 'refund' | 'bonus'
+  description     String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  
+  @@map("coin_transactions")
+}
+
+// 用户金币余额表
+model UserCoins {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  balance   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_coins")
+}
+
+// Webhook 事件记录表（幂等处理）
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique @map("event_id") // Stripe/PayPal 的事件ID
+  orderId     String   @map("order_id")
+  provider    String   // 'stripe' | 'paypal'
+  processedAt DateTime @default(now()) @map("processed_at")
+  
+  @@map("webhook_events")
+}
+
+// ==================== 专业级埋点系统 ====================
+
+// 网站统计表 - 按小时
+model WebsiteStatsHourly {
+  id            String   @id @default(cuid())
+  date          DateTime @map("date") // 统计日期 (站点时区)
+  hour          Int      @map("hour") // 0-23
+  pv            BigInt   @default(0) // 页面浏览量
+  uv            BigInt   @default(0) // 独立访客数
+  registrations BigInt   @default(0) // 注册用户数
+  viewers       BigInt   @default(0) // 观看用户数
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([date, hour])
+  @@map("website_stats_hourly")
+}
+
+// 网站统计表 - 按天
+model WebsiteStatsDaily {
+  id            String   @id @default(cuid())
+  date          DateTime @unique @map("date") // 统计日期
+  pv            BigInt   @default(0) // 页面浏览量
+  uv            BigInt   @default(0) // 独立访客数
+  registrations BigInt   @default(0) // 注册用户数
+  viewers       BigInt   @default(0) // 观看用户数
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("website_stats_daily")
+}
+
+// 用户会话表
+model UserSession {
+  id          String   @id @default(cuid())
+  visitorId   String   @map("visitor_id") // UUID访客ID
+  sessionId   String   @map("session_id") // UUID会话ID
+  userId      String?  @map("user_id") // 用户ID（已登录时）
+  ipAddress   String?  @map("ip_address") // INET类型
+  userAgent   String?  @map("user_agent")
+  device      String?  // 设备类型
+  browser     String?  // 浏览器
+  os          String?  // 操作系统
+  firstVisit  DateTime @default(now()) @map("first_visit")
+  lastVisit   DateTime @default(now()) @map("last_visit")
+  visitCount  Int      @default(1) @map("visit_count")
+
+  @@unique([visitorId, sessionId])
+  @@index([visitorId])
+  @@index([sessionId])
+  @@map("user_sessions")
+}
+
+// 用户事件表（幂等）
+model UserEvent {
+  id            String   @id @default(cuid())
+  eventId       String   @unique @map("event_id") // UUID
+  visitorId     String   @map("visitor_id")
+  sessionId     String   @map("session_id")
+  userId        String?  @map("user_id")
+  eventName     String   @map("event_name")
+  schemaVersion Int      @default(1) @map("schema_version")
+  props         Json     @default("{}") // JSONB类型
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([visitorId])
+  @@index([sessionId])
+  @@index([eventName])
+  @@index([createdAt])
+  @@map("user_events")
+}
+
+// 页面访问表（幂等）
+model PageView {
+  id              String   @id @default(cuid())
+  pageViewId      String   @unique @map("page_view_id") // UUID
+  visitorId       String   @map("visitor_id")
+  sessionId       String   @map("session_id")
+  userId          String?  @map("user_id")
+  page            String   // 页面路径
+  title           String?  // 页面标题
+  referrer        String?  // 来源页面
+  durationSeconds Int      @default(0) @map("duration_seconds") // 总时长
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([visitorId])
+  @@index([sessionId])
+  @@index([page])
+  @@index([createdAt])
+  @@map("page_views")
+}
+
+// 页面访问时长心跳表（增量更新）
+model PageViewHeartbeat {
+  id            String   @id @default(cuid())
+  pageViewId    String   @map("page_view_id") // 关联PageView
+  durationDelta Int      @map("duration_delta") // 时长增量（秒）
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([pageViewId])
+  @@index([createdAt])
+  @@map("page_view_heartbeats")
+}
