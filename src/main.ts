@@ -8,7 +8,7 @@ import { CloudflareService } from './services/cloudflare.js'
 import { PaymentService } from './services/payment.js'
 import { webhookRoutes } from './routes/webhooks.js'
 import { userRoutes } from './routes/users.js'
-import { analyticsRealRoutes } from './routes/analytics-real.js'
+import analyticsRealNewRoutes from './routes/analytics-real-new.js'
 
 // Load environment variables
 dotenv.config()
@@ -180,7 +180,7 @@ fastify.register(webhookRoutes)
 fastify.register(userRoutes)
 
 // 注册统计路由
-fastify.register(analyticsRealRoutes)
+fastify.register(analyticsRealNewRoutes)
 
 // Stripe 支付端点
 fastify.post('/api/v1/user/purchase/checkout/stripe', async (request, reply) => {
