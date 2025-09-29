@@ -446,40 +446,9 @@ model WebsiteStats {
   @@map("website_stats")
 }
 
-// 用户行为记录表（用于计算UV）
-model UserSession {
-  id          String   @id @default(cuid())
-  sessionId   String   @unique @map("session_id") // 会话ID
-  userId      String?  @map("user_id") // 用户ID（如果已登录）
-  ipAddress   String   @map("ip_address")
-  userAgent   String?  @map("user_agent")
-  referrer    String?  // 来源页面
-  country     String?  // 国家
-  city        String?  // 城市
-  device      String?  // 设备类型
-  browser     String?  // 浏览器
-  os          String?  // 操作系统
-  firstVisit  DateTime @default(now()) @map("first_visit")
-  lastVisit   DateTime @default(now()) @map("last_visit")
-  visitCount  Int      @default(1) @map("visit_count")
-  isActive    Boolean  @default(true) @map("is_active")
+// 用户行为记录表（用于计算UV）- 已移至下方Analytics系统
 
-  @@map("user_sessions")
-}
-
-// 页面访问记录表（用于计算PV）
-model PageView {
-  id          String   @id @default(cuid())
-  sessionId   String   @map("session_id")
-  userId      String?  @map("user_id")
-  page        String   // 页面路径
-  title       String?  // 页面标题
-  referrer    String?  // 来源页面
-  duration    Int?     // 停留时间（秒）
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@map("page_views")
-}
+// 页面访问记录表（用于计算PV）- 已移至下方Analytics系统
 
 // ==================== 专业级埋点系统 ====================
 
