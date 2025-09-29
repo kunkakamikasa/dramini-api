@@ -243,17 +243,32 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
   // Analytics stats
   fastify.get('/api/v1/analytics/stats', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { granularity = 'day', days = '7' } = request.query as { granularity?: string; days?: string }
+      const { granularity = 'day', days, startDate: startDateParam, endDate: endDateParam } = request.query as { 
+        granularity?: string; 
+        days?: string; 
+        startDate?: string; 
+        endDate?: string 
+      }
       
-      const daysCount = parseInt(days) || 7
-      const startDate = new Date()
-      startDate.setDate(startDate.getDate() - daysCount)
+      let startDate: Date, endDate: Date
+      
+      if (startDateParam && endDateParam) {
+        // 使用新的 startDate/endDate 参数
+        startDate = new Date(startDateParam)
+        endDate = new Date(endDateParam)
+      } else {
+        // 使用旧的 days 参数（向后兼容）
+        const daysCount = parseInt(days || '7')
+        endDate = new Date()
+        startDate = new Date()
+        startDate.setDate(endDate.getDate() - daysCount)
+      }
       
       const stats = []
       
-      for (let d = 0; d < daysCount; d++) {
-        const currentDate = new Date(startDate)
-        currentDate.setDate(startDate.getDate() + d)
+      // 支持startDate到endDate的精确时间范围
+      const currentDate = new Date(startDate)
+      while (currentDate <= endDate) {
         
         if (granularity === 'hour') {
           for (let h = 0; h < 24; h++) {
@@ -283,6 +298,13 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
             })
           }
         }
+        
+        // 移动到下一个时间单位
+        if (granularity === 'hour') {
+          currentDate.setHours(currentDate.getHours() + 1)
+        } else {
+          currentDate.setDate(currentDate.getDate() + 1)
+        }
       }
       
       return reply.send({
@@ -290,7 +312,7 @@ export async function analyticsRealRoutes(fastify: FastifyInstance) {
         data: {
           granularity,
           startDate: startDate.toISOString(),
-          endDate: new Date().toISOString(),
+          endDate: endDate.toISOString(),
           stats: stats
         },
         metadata: {
