@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/main.js",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
