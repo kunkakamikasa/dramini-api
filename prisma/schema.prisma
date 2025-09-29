@@ -427,3 +427,66 @@ model WebhookEvent {
 
   @@map("webhook_events")
 }
+
+// 网站访问统计表
+model WebsiteStats {
+  id          String   @id @default(cuid())
+  date        DateTime @map("date") // 统计日期
+  hour        Int?     // 小时 (0-23)，null表示全天统计
+  pv          Int      @default(0) // 页面浏览量
+  uv          Int      @default(0) // 独立访客数
+  registrations Int    @default(0) // 注册用户数
+  viewers     Int      @default(0) // 观看用户数
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([date, hour])
+  @@map("website_stats")
+}
+
+// 用户行为记录表（用于计算UV）
+model UserSession {
+  id          String   @id @default(cuid())
+  sessionId   String   @unique @map("session_id") // 会话ID
+  userId      String?  @map("user_id") // 用户ID（如果已登录）
+  ipAddress   String   @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  referrer    String?  // 来源页面
+  country     String?  // 国家
+  city        String?  // 城市
+  device      String?  // 设备类型
+  browser     String?  // 浏览器
+  os          String?  // 操作系统
+  firstVisit  DateTime @default(now()) @map("first_visit")
+  lastVisit   DateTime @default(now()) @map("last_visit")
+  visitCount  Int      @default(1) @map("visit_count")
+  isActive    Boolean  @default(true) @map("is_active")
+
+  @@map("user_sessions")
+}
+
+// 页面访问记录表（用于计算PV）
+model PageView {
+  id          String   @id @default(cuid())
+  sessionId   String   @map("session_id")
+  userId      String?  @map("user_id")
+  page        String   // 页面路径
+  title       String?  // 页面标题
+  referrer    String?  // 来源页面
+  duration    Int?     // 停留时间（秒）
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("page_views")
+}
+
+// 用户行为事件表
+model UserEvent {
+  id          String   @id @default(cuid())
+  sessionId   String   @map("session_id")
+  userId      String?  @map("user_id")
+  eventType   String   @map("event_type") // 'page_view', 'video_play', 'register', 'login', 'purchase'
+  eventData   String?  @map("event_data") // JSON数据
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("user_events")
+}
