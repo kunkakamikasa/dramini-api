@@ -79,3 +79,4 @@ export default async function publicRoutes(fastify: any) {
         }
     });
 }
+

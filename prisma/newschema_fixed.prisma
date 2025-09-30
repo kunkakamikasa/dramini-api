@@ -442,3 +442,5 @@ model PageViewHeartbeat {
   @@index([createdAt])
   @@map("page_view_heartbeats")
 }
+
+

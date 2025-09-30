@@ -3,3 +3,4 @@ export default async function healthRoutes(fastify: any) {
         return { ok: true };
     });
 }
+

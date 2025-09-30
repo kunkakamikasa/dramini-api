@@ -292,3 +292,5 @@ export default async function analyticsRealRoutes(fastify: FastifyInstance) {
     }
   })
 }
+
+
